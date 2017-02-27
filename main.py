@@ -1,95 +1,13 @@
-import tensorflow as tf, numpy as np, cv2 as cv
+import tensorflow as tf, numpy as np, cv2 as cv, matplotlib.pyplot as plt
 import sys, random, argparse, os, uuid, pickle, h5py
 from models import test
 from msssim import MultiScaleSSIM, tf_ssim, tf_ms_ssim
+from data import Floorplans
 
-
-
-class Dataset:
-    def __init__(self, dataset):
-        self.dataset = dataset[()]
-        # self.dataset = cv.cvtColor(self.dataset, cv.COLOR_BGR2GRAY)
-        self.current_pos = 0
-        self.num_examples = len(dataset)
-
-    def next_batch(self, batch_size):
-        if self.current_pos + batch_size > self.num_examples:
-            self.current_pos = 0
-        x = self.dataset[self.current_pos : self.current_pos+batch_size]
-        self.current_pos += batch_size
-        # return (x, None)
-        return (x, None)
-        # return (np.reshape(x, (batch_size, 64*64*3)), None)
-
-        
-        # if self.current_pos + batch_size < self.num_examples:
-        #     files = self.files[self.current_pos:self.current_pos+batch_size]
-        #     self.current_pos += batch_size
-        # else:
-        #     remainder = self.current_pos + batch_size - self.num_examples
-        #     files = self.files[self.current_pos:] + self.files[0:remainder]
-        #     self.current_pos = remainder
-        #     images = []
-        # for f in files:
-        #     i = cv.imread(f,cv.IMREAD_COLOR)
-        #     images.append(cv.resize(i, (64, 64)))
-        #     a = np.reshape(np.array(images), (batch_size, 64*64*3))
-        # return (a, None)    
-
-        
-        
-    # def __init__(self, text_file):
-    #     self.files = []
-    #     d = os.path.dirname(text_file)
-    #     with open(text_file) as f:
-    #         for line in f:
-    #             full_path = os.path.join(d, line)
-    #             self.files.append(full_path.rstrip())
-    #     self.num_examples = len(self.files)
-    #     self.current_pos = 0
-
-    # def next_batch(self, batch_size):
-    #     if self.current_pos + batch_size < self.num_examples:
-    #         files = self.files[self.current_pos:self.current_pos+batch_size]
-    #         self.current_pos += batch_size
-    #     else:
-    #         remainder = self.current_pos + batch_size - self.num_examples
-    #         files = self.files[self.current_pos:] + self.files[0:remainder]
-    #         self.current_pos = remainder
-    #     images = []
-    #     for f in files:
-    #         i = cv.imread(f,cv.IMREAD_COLOR)
-    #         images.append(cv.resize(i, (64, 64)))
-    #     a = np.reshape(np.array(images), (batch_size, 64*64*3))
-    #     return (a, None)
-        
-    
-
-class Floorplans:
-    def __init__(self, root_dir='/mnt/research/datasets/floorplans/'):
-        # self.test = Dataset(os.path.join(root_dir, 'test_set.txt'))
-        # self.train = Dataset(os.path.join(root_dir, 'train_set.txt'))
-        # self.validation = Dataset(os.path.join(root_dir, 'validation_set.txt'))
-        self.file = h5py.File("/mnt/research/projects/hem/datasets/floorplan_64_float32.hdf5", 'r')
-        sys.stdout.write("Loading test...")
-        sys.stdout.flush()
-        self.test = Dataset(self.file['test/images'])
-        sys.stdout.write("done!\n\rLoading train...")
-        sys.stdout.flush()
-        self.train = Dataset(self.file['train/images'])
-        sys.stdout.write("done!\n\rLoading validation...")
-        sys.stdout.flush()
-        self.validation = Dataset(self.file['validation/images'])
-        sys.stdout.write("done!\n\r")
-        sys.stdout.flush()
-
-        print(self.train, self.test, self.validation)
-        
 
         
 # helper functions
-def generate(data, tensor, xs, include_actual=True):
-    # print(xs.shape)
+def generate_example_row(data, tensor, xs, include_actual=True):
     examples = sess.run(tensor, feed_dict={x: xs})
     montage = None
     for i, pred in enumerate(examples):
@@ -101,7 +19,7 @@ def generate(data, tensor, xs, include_actual=True):
 
             gray_img = cv.cvtColor(data.test.dataset[i], cv.COLOR_BGR2GRAY)
             v = np.vstack((gray_img * 255.0,
-                           np.reshape(pred, (64, 64)) * 255.0)) 
+                           np.reshape(pred, (64, 64)) * 255.0))
             # v = np.vstack((np.reshape(data.test.dataset[i], (64, 64)) * 255.0,
             #                np.reshape(pred, (64, 64)) * 255.0))
         else:
@@ -140,8 +58,10 @@ def prep_workspace(dirname):
             'validate_loss': open(os.path.join(dirname, "logs", "validate_loss.csv"), 'a'),
             'test_loss' : open(os.path.join(dirname, "logs", "test_loss.csv"), 'a')}
 
-    
 
+def plot_loss(image_dir):
+    pass
+    
 
 
     
@@ -242,7 +162,7 @@ if __name__ == '__main__':
         # examples = np.reshape(examples, (args.examples, 64*64*3))
         # examples = np.reshape(examples, (args.examples, 64*64))
         # examples = tf.image
-        row = generate(data, y_hat, examples, epoch==1)
+        row = generate_example_row(data, y_hat, examples, epoch==1)
         imgfile = os.path.join(args.dir, 'images', 'montage_{:03d}.png'.format(epoch))
         cv.imwrite(imgfile, row)
         montage = row if montage is None else np.vstack((montage, row))
@@ -259,7 +179,7 @@ if __name__ == '__main__':
         sys.stdout.flush()
 
 
-
+    # save complete montage
     cv.imwrite(os.path.join(args.dir, 'images', 'montage.png'), montage)
     
     # perform test
@@ -275,5 +195,32 @@ if __name__ == '__main__':
         sys.stdout.flush()
     log_files['test_loss'].write('{:05d},{:.5f}\n'.format((epoch) * n_trbatches * args.batchsize, tel/n_tebatches))        
     sys.stdout.write('\r\n')
+
+    # close down log files
+    for key in log_files:
+        log_files[key].close()
+
+    # generate charts
+    train_loss = np.genfromtxt(os.path.join(args.dir, "logs", "train_loss.csv"), delimiter=',')
+    test_loss = np.genfromtxt(os.path.join(args.dir, "logs", "test_loss.csv"), delimiter=',')
+    validate_loss = np.genfromtxt(os.path.join(args.dir, "logs", "validate_loss.csv"), delimiter=',')
+    plt.rc('text', usetex=True)
+    plt.rc('font', **{'family':'serif','serif':['Palatino']})
+    for x in [(train_loss, {}), (validate_loss, {'color': 'firebrick'})]:
+        data, plot_args = x
+        iters = data[:,[0]]
+        vals = data[:,[1]]
+        plt.plot(iters, vals, **plot_args)
+        plt.xlabel('Iteration')
+        plt.ylabel(r'$\ell_1$ Loss')
+    plt.savefig(os.path.join(args.dir, "images", "loss.pdf"))
+
+
+    
+    
+    
+
+        
+    
                    
 

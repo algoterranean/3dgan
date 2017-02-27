@@ -1,0 +1,8 @@
+
+* TODO Add ability to alter model input/output depending on the dataset
+* TODO Add option for using grayscale input/output
+* TODO Move code in main block to functions where best
+* TODO Add option to use partial dataset per epoch, or to do validation more frequently than per epoch
+* TODO Add option for loss function
+
+
