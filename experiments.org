@@ -1,0 +1,28 @@
+
+* Simple FC
+** 256 > 128 > 64 < 128 < 256
+   #+begin_src sh :results output
+   python main.py --dataset floorplan --layers 256 128 --dir workspace/fc1 --epochs 3
+   #+end_src
+
+   #+RESULTS:
+   #+begin_example
+   Loading test...done!
+   Loading train...done!
+   Loading validation...done!
+   <data.Dataset object at 0x7f2c601ec898> <data.Dataset object at 0x7f2c601ec978> <data.Dataset object at 0x7f2c601ec9e8>
+   Epoch 1: Train loss (0.23523)
+   Epoch 1: Validation loss (0.15285)
+   Generating examples to disk...
+   Writing snapshot to disk...
+   Epoch 2: Train loss (0.14413)
+   Epoch 2: Validation loss (0.13748)
+   Generating examples to disk...
+   Writing snapshot to disk...
+   Epoch 3: Train loss (0.13348)
+   Epoch 3: Validation loss (0.13026)
+   Generating examples to disk...
+   Writing snapshot to disk...
+   Test loss: 0.13010
+#+end_example
+

@@ -1,10 +1,31 @@
 
+
+* Models
+** Fully Connected
+** Convolutional
+
+* Utility
+** Imports
+** Logging
+** Inference
+
+* Callbacks
+** Logging
+** Inference
+
+* Main
+** Imports
+#+begin_src python :tangle main.py
 import tensorflow as tf, numpy as np, cv2 as cv, matplotlib.pyplot as plt
 import sys, random, argparse, os, uuid, pickle, h5py
 from models import test
 from msssim import MultiScaleSSIM, tf_ssim, tf_ms_ssim
 from data import Floorplans
+#+end_src
 
+** Utility Functions
+
+#+begin_src python :tangle main.py
 # helper functions
 def generate_example_row(data, tensor, xs, include_actual=True):
     examples = sess.run(tensor, feed_dict={x: xs})
@@ -60,7 +81,9 @@ def prep_workspace(dirname):
 
 def plot_loss(image_dir):
     pass
-
+#+end_src
+** Args
+#+begin_src python :tangle main.py
 parser = argparse.ArgumentParser()
 parser.add_argument('--epochs', type=int, default=3)
 parser.add_argument('--batchsize', type=int, default=256)
@@ -73,7 +96,9 @@ parser.add_argument('--dir', type=str, default='workspace/{}'.format(uuid.uuid4(
 parser.add_argument('--resume', default=False, action='store_true')
 parser.add_argument('--interactive', default=False, action='store_true')
 args = parser.parse_args()
-
+#+end_src
+** Setup
+#+begin_src python :tangle main.py
 # for repeatability purposes
 random.seed(args.seed)
 # dataset
@@ -121,6 +146,11 @@ if not args.resume:
     pickle.dump(args, open(os.path.join(args.dir, 'settings'), 'wb'))
     tf.train.export_meta_graph(os.path.join(args.dir, 'model'))
 
+
+
+#+end_src
+** Training
+#+begin_src python :tangle main.py
 start_epoch = sess.run(global_epoch)
 for epoch in range(start_epoch, args.epochs+start_epoch):
     # perform training
@@ -184,7 +214,9 @@ for epoch in range(start_epoch, args.epochs+start_epoch):
     if args.interactive:
         sys.stdout.write('complete!\r\n')
         sys.stdout.flush()
-
+#+end_src
+** Testing
+#+begin_src python :tangle main.py
 # save complete montage
 cv.imwrite(os.path.join(args.dir, 'images', 'montage.png'), montage)
     
@@ -224,3 +256,4 @@ for x in [(train_loss, {}), (validate_loss, {'color': 'firebrick'})]:
     plt.xlabel('Iteration')
     plt.ylabel(r'$\ell_1$ Loss')
 plt.savefig(os.path.join(args.dir, "images", "loss.pdf"))
+#+end_src
