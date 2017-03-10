@@ -7,22 +7,46 @@
 
    #+RESULTS:
    #+begin_example
-   Loading test...done!
-   Loading train...done!
-   Loading validation...done!
-   <data.Dataset object at 0x7f2c601ec898> <data.Dataset object at 0x7f2c601ec978> <data.Dataset object at 0x7f2c601ec9e8>
-   Epoch 1: Train loss (0.23523)
-   Epoch 1: Validation loss (0.15285)
+   Loading dataset...
+   <data.Dataset object at 0x7f77bf684748> <data.Dataset object at 0x7f77bf684710> <data.Dataset object at 0x7f77bf684780>
+   Epoch 1: Train loss (0.23120)
+   Epoch 1: Validation loss (0.14952)
    Generating examples to disk...
    Writing snapshot to disk...
-   Epoch 2: Train loss (0.14413)
-   Epoch 2: Validation loss (0.13748)
+   Epoch 2: Train loss (0.14147)
+   Epoch 2: Validation loss (0.13655)
    Generating examples to disk...
    Writing snapshot to disk...
-   Epoch 3: Train loss (0.13348)
-   Epoch 3: Validation loss (0.13026)
+   Epoch 3: Train loss (0.13218)
+   Epoch 3: Validation loss (0.12887)
    Generating examples to disk...
    Writing snapshot to disk...
-   Test loss: 0.13010
+   Test loss: 0.12875
+#+end_example
+
+
+* Simple CNN
+** 256 > 128 > 64 < 128 < 256
+   #+begin_src sh :results output
+
+   python main.py --dataset floorplan --layers 256 128 --dir workspace/cnn1 --epochs 3
+   #+end_src
+
+   #+RESULTS:
+   #+begin_example
+   Loading dataset...
+   Epoch 1: Train loss (5857900.69630)
+   Epoch 1: Validation loss (2714.05615)
+   Generating examples to disk...
+   Writing snapshot to disk...
+   Epoch 2: Train loss (1163344.53834)
+   Epoch 2: Validation loss (4250.64540)
+   Generating examples to disk...
+   Writing snapshot to disk...
+   Epoch 3: Train loss (5688532.39311)
+   Epoch 3: Validation loss (41.51008)
+   Generating examples to disk...
+   Writing snapshot to disk...
+   Test loss: 41.46348
 #+end_example
 

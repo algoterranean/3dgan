@@ -1,65 +1,10 @@
-
-import tensorflow as tf, numpy as np, cv2 as cv, matplotlib.pyplot as plt
-import sys, random, argparse, os, uuid, pickle, h5py
-from models import test
+import tensorflow as tf, numpy as np, matplotlib.pyplot as plt
+import sys, random, argparse, os, uuid, pickle, h5py, cv2
+# from models import test
+from models import simple_fc, simple_cnn
 from msssim import MultiScaleSSIM, tf_ssim, tf_ms_ssim
 from data import Floorplans
-
-# helper functions
-def generate_example_row(data, tensor, xs, include_actual=True):
-    examples = sess.run(tensor, feed_dict={x: xs})
-    montage = None
-    for i, pred in enumerate(examples):
-        if include_actual:
-            # v = np.vstack((np.reshape(data.test.images[i], (28, 28)) * 255.0,
-            #                np.reshape(pred, (28, 28)) * 255.0))
-            # v = np.vstack((np.reshape(data.test.dataset[i], (64, 64, 3)) * 255.0,
-            #                np.reshape(pred, (64, 64, 3)) * 255.0))
-
-            gray_img = cv.cvtColor(data.test.dataset[i], cv.COLOR_BGR2GRAY)
-            v = np.vstack((gray_img * 255.0,
-                           np.reshape(pred, (64, 64)) * 255.0))
-            # v = np.vstack((np.reshape(data.test.dataset[i], (64, 64)) * 255.0,
-            #                np.reshape(pred, (64, 64)) * 255.0))
-        else:
-            # v = np.reshape(pred, (28, 28)) * 255.0
-            # v = np.reshape(pred, (64, 64, 3)) * 255.0
-            v = np.reshape(pred, (64, 64)) * 255.0            
-        montage = v if montage is None else np.hstack((montage, v))
-    return montage
-
-
-def print_progress(epoch, completed, total, loss):
-    sys.stdout.write('\r')
-    sys.stdout.write('Epoch {:03d}: {:05d}/{:05d}: {:.4f}'.format(epoch, completed, total, loss))
-    sys.stdout.flush()
-
-
-def get_dataset(name):
-    if name == 'mnist':
-        from tensorflow.examples.tutorials.mnist import input_data
-        return input_data.read_data_sets("MNIST_data", one_hot=True)
-    elif name == 'floorplan':
-        return Floorplans()
-
-
-def prep_workspace(dirname):
-    subdirs = [os.path.join(dirname, "checkpoints"),
-               os.path.join(dirname, "images"),
-               os.path.join(dirname, "logs")]
-    if not os.path.exists(dirname):
-        os.makedirs(dirname)
-    for d in subdirs:
-        if not os.path.exists(d):
-            os.mkdir(d)
-            
-    return {'train_loss': open(os.path.join(dirname, "logs", "train_loss.csv"), 'a'),
-            'validate_loss': open(os.path.join(dirname, "logs", "validate_loss.csv"), 'a'),
-            'test_loss' : open(os.path.join(dirname, "logs", "test_loss.csv"), 'a')}
-
-
-def plot_loss(image_dir):
-    pass
+from util import *
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--epochs', type=int, default=3)
@@ -72,22 +17,33 @@ parser.add_argument('--dataset', type=str, default='mnist')
 parser.add_argument('--dir', type=str, default='workspace/{}'.format(uuid.uuid4()))
 parser.add_argument('--resume', default=False, action='store_true')
 parser.add_argument('--interactive', default=False, action='store_true')
+parser.add_argument('--model', type=str, default='fc')
+parser.add_argument('--grayscale', default=False, action='store_true')
 args = parser.parse_args()
 
 # for repeatability purposes
 random.seed(args.seed)
-# dataset
-data = get_dataset(args.dataset)
+
 # model
 sess = tf.Session()
-
 # x = tf.placeholder("float", [None, 64, 64, 3])
 x = tf.placeholder("float", [None, 64, 64, 3])
-y_hat = test.model(tf.reshape(tf.image.rgb_to_grayscale(x), (-1, 64*64)), args.layers)
+if args.grayscale:
+    x = tf.image.rgb_to_grayscale(x)
+    
+if args.model == 'fc':
+    y_hat = simple_fc(x, args.layers)
+elif args.model == 'cnn':
+    y_hat = simple_cnn(x, args.layers)
+
+# dataset
+data = get_dataset(args.dataset)
+
     
 
 # loss_l1 = tf.reduce_mean(tf.abs(x - y_hat))
-loss_l2 = tf.reduce_mean(tf.pow(tf.reshape(tf.image.rgb_to_grayscale(x), (-1, 64*64)) - y_hat, 2))
+# loss_l2 = tf.reduce_mean(tf.pow(tf.reshape(tf.image.rgb_to_grayscale(x), (-1, 64*64)) - y_hat, 2))
+loss_l2 = tf.reduce_mean(tf.pow(x - y_hat, 2))
 # loss_l2 = tf.reduce_mean(tf.pow(x - y_hat, 2))
 # loss_rmse = tf.sqrt(tf.reduce_mean(tf.pow(x - y_hat, 2)))
 # def l(actual, pred):
@@ -164,9 +120,9 @@ for epoch in range(start_epoch, args.epochs+start_epoch):
     # examples = np.reshape(examples, (args.examples, 64*64*3))
     # examples = np.reshape(examples, (args.examples, 64*64))
     # examples = tf.image
-    row = generate_example_row(data, y_hat, examples, epoch==1)
+    row = generate_example_row(data, y_hat, examples, epoch==1, sess, x)
     imgfile = os.path.join(args.dir, 'images', 'montage_{:03d}.png'.format(epoch))
-    cv.imwrite(imgfile, row)
+    cv2.imwrite(imgfile, row)
     montage = row if montage is None else np.vstack((montage, row))
     if args.interactive:
         sys.stdout.write('complete!\r\n')
@@ -186,7 +142,7 @@ for epoch in range(start_epoch, args.epochs+start_epoch):
         sys.stdout.flush()
 
 # save complete montage
-cv.imwrite(os.path.join(args.dir, 'images', 'montage.png'), montage)
+cv2.imwrite(os.path.join(args.dir, 'images', 'montage.png'), montage)
     
 # perform test
 n_tebatches = int(data.test.num_examples/args.batchsize)

@@ -1,6 +1,5 @@
 import h5py, sys
 
-
 class Dataset:
     def __init__(self, dataset):
         self.dataset = dataset[()]
@@ -24,16 +23,16 @@ class Floorplans:
         # self.train = Dataset(os.path.join(root_dir, 'train_set.txt'))
         # self.validation = Dataset(os.path.join(root_dir, 'validation_set.txt'))
         self.file = h5py.File("/mnt/research/projects/hem/datasets/floorplan_64_float32.hdf5", 'r')
-        sys.stdout.write("Loading test...")
-        sys.stdout.flush()
+        # sys.stdout.write("Loading test...")
+        # sys.stdout.flush()
         self.test = Dataset(self.file['test/images'])
-        sys.stdout.write("done!\n\rLoading train...")
-        sys.stdout.flush()
+        # sys.stdout.write("done!\n\rLoading train...")
+        # sys.stdout.flush()
         self.train = Dataset(self.file['train/images'])
-        sys.stdout.write("done!\n\rLoading validation...")
-        sys.stdout.flush()
+        # sys.stdout.write("done!\n\rLoading validation...")
+        # sys.stdout.flush()
         self.validation = Dataset(self.file['validation/images'])
-        sys.stdout.write("done!\n\r")
-        sys.stdout.flush()
+        # sys.stdout.write("done!\n\r")
+        # sys.stdout.flush()
 
-        print(self.train, self.test, self.validation)
+        # print(self.train, self.test, self.validation)
