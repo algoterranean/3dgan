@@ -1,8 +1,16 @@
 
-* TODO Add ability to alter model input/output depending on the dataset
-* TODO Move code in main block to functions where best
-
-* TODO Add option for using grayscale input/output
+* DONE Add ability to alter model input/output depending on the dataset
+  CLOSED: [2017-03-11 Sat 16:00]
+  - State "DONE"       from "STARTED"    [2017-03-11 Sat 16:00]
+  - State "STARTED"    from "TODO"       [2017-03-11 Sat 16:00]
+* DONE Move code in main block to functions where best
+  CLOSED: [2017-03-11 Sat 16:00]
+  - State "DONE"       from "STARTED"    [2017-03-11 Sat 16:00]
+  - State "STARTED"    from "TODO"       [2017-03-11 Sat 16:00]
+* DONE Add option for using grayscale input/output
+  CLOSED: [2017-03-11 Sat 16:00]
+  - State "DONE"       from "STARTED"    [2017-03-11 Sat 16:00]
+  - State "STARTED"    from "TODO"       [2017-03-11 Sat 16:00]
 * TODO Add option to use partial dataset per epoch, or to do validation more frequently than per epoch
 * TODO Add option for loss function
 * TODO Add option for model

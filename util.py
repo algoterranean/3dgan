@@ -6,28 +6,23 @@ import cv2
 from data import Floorplans
 
 # helper functions
-def generate_example_row(data, tensor, xs, include_actual, sess, x):
-    examples = sess.run(tensor, feed_dict={x: xs})
+def generate_example_row(data, tensor, xs, include_actual, sess, x_input, grayscale=False):
+    examples = sess.run(tensor, feed_dict={x_input: xs})
     montage = None
     for i, pred in enumerate(examples):
-        if include_actual:
-            # v = np.vstack((np.reshape(data.test.images[i], (28, 28)) * 255.0,
-            #                np.reshape(pred, (28, 28)) * 255.0))
-            # v = np.vstack((np.reshape(data.test.dataset[i], (64, 64, 3)) * 255.0,
-            #                np.reshape(pred, (64, 64, 3)) * 255.0))
-            gray_img = data.test.dataset[i]
-            # gray_img = cv2.cvtColor(data.test.dataset[i], cv2.COLOR_BGR2GRAY)
-            # v = np.vstack((gray_img * 255.0,
-            #                np.reshape(pred, (64, 64)) * 255.0))
-            v = np.vstack((gray_img * 255.0, pred * 255.0))
-            # v = np.vstack((np.reshape(data.test.dataset[i], (64, 64)) * 255.0,
-            #                np.reshape(pred, (64, 64)) * 255.0))
-        else:
-            # v = np.reshape(pred, (28, 28)) * 255.0
-            # v = np.reshape(pred, (64, 64, 3)) * 255.0
-            v = pred * 255.0
-            # v = np.reshape(pred, (64, 64)) * 255.0
 
+        if include_actual:
+            if grayscale:
+                input_img = cv2.cvtColor(data.test.dataset[i], cv2.COLOR_BGR2GRAY)
+                pred = np.squeeze(pred)
+            else:
+                input_img = data.test.dataset[i]
+            # print('pred:', pred.shape, 'input_img:', input_img.shape)
+            v = np.vstack((input_img * 255.0, pred * 255.0))
+        else:
+            if grayscale:
+                pred = np.squeeze(pred)
+            v = pred * 255.0
         montage = v if montage is None else np.hstack((montage, v))
     return montage
 

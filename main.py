@@ -1,5 +1,5 @@
 import tensorflow as tf, numpy as np, matplotlib.pyplot as plt
-import sys, random, argparse, os, uuid, pickle, h5py, cv2
+import sys, random, argparse, os, uuid, pickle, h5py, cv2, time
 # from models import test
 from models import simple_fc, simple_cnn
 from msssim import MultiScaleSSIM, tf_ssim, tf_ms_ssim
@@ -19,6 +19,9 @@ parser.add_argument('--resume', default=False, action='store_true')
 parser.add_argument('--interactive', default=False, action='store_true')
 parser.add_argument('--model', type=str, default='fc')
 parser.add_argument('--grayscale', default=False, action='store_true')
+parser.add_argument('--loss', type=str, default='l1')
+parser.add_argument('--optimizer', type=str, default='RMSProp')
+parser.add_argument('--momentum', type=float, default=0.01)
 args = parser.parse_args()
 
 # for repeatability purposes
@@ -27,9 +30,12 @@ random.seed(args.seed)
 # model
 sess = tf.Session()
 # x = tf.placeholder("float", [None, 64, 64, 3])
-x = tf.placeholder("float", [None, 64, 64, 3])
+
+x_input = tf.placeholder("float", [None, 64, 64, 3])
 if args.grayscale:
-    x = tf.image.rgb_to_grayscale(x)
+    x = tf.image.rgb_to_grayscale(x_input)
+else:
+    x = x_input
     
 if args.model == 'fc':
     y_hat = simple_fc(x, args.layers)
@@ -40,24 +46,42 @@ elif args.model == 'cnn':
 data = get_dataset(args.dataset)
 
     
+# loss
+if args.loss == 'l1':
+    loss = tf.reduce_mean(tf.abs(x - y_hat))
+elif args.loss == 'l2':
+    loss = tf.reduce_mean(tf.pow(x - y_hat, 2))
+elif args.loss == 'rmse':
+    loss = tf.sqrt(tf.reduce_mean(tf.pow(x - y_hat, 2)))
+elif args.loss == 'ssim':
+    loss = 1.0 - tf_ssim(tf.image.rgb_to_grayscale(x), tf.image.rgb_to_grayscale(y_hat))
+elif args.loss == 'crossentropy':
+    loss = -tf.reduce_sum(x * tf.log(y_hat))
 
-# loss_l1 = tf.reduce_mean(tf.abs(x - y_hat))
-# loss_l2 = tf.reduce_mean(tf.pow(tf.reshape(tf.image.rgb_to_grayscale(x), (-1, 64*64)) - y_hat, 2))
-loss_l2 = tf.reduce_mean(tf.pow(x - y_hat, 2))
-# loss_l2 = tf.reduce_mean(tf.pow(x - y_hat, 2))
-# loss_rmse = tf.sqrt(tf.reduce_mean(tf.pow(x - y_hat, 2)))
-# def l(actual, pred):
-#     x = tf.image.rgb_to_grayscale(tf.reshape(actual, (-1, 64, 64)))
-#     y_hat = tf.image.rgb_to_grayscale(tf.reshape(pred, (-1, 64, 64)))
-#     return tf.reduce_mean(tf.abs(x - y_hat))
-    
-loss = loss_l2
-    
-# loss = tf_ssim(tf.reshape(x, (-1, 64, 64, 3)), tf.reshape(y_hat, (-1, 64, 64, 3)))
-# tf_ssim
-# tf_ms_ssim
+# optimizer
+if args.optimizer == 'RMSProp':
+    optimizer = tf.train.RMSPropOptimizer(args.lr)
+elif args.optimizer == 'Adadelta':
+    optimizer = tf.train.AdadeltaOptimizer(args.lr)
+elif args.optimizer == 'GD':
+    optimizer = tf.train.GradientDescentOptimizer(args.lr)
+elif args.optimizer == 'Adagrad':
+    optimizer = tf.train.AdagradOptimizer(args.lr)
+elif args.optimizer == 'Momentum':
+    optimizer = tf.train.MomentumOptimizer(args.lr, args.momentum)
+elif args.optimizer == 'Adam':
+    optimizer = tf.train.AdamOptimizer(args.lr)
+elif args.optimizer == 'Ftrl':
+    optimizer = tf.train.FtrlOptimizer(args.lr)
+elif args.optimizer == 'PGD':
+    optimizer = tf.train.ProximalGradientDescentOptimizer(args.lr)
+elif args.optimizer == 'PAdagrad':
+    optimizer = tf.train.ProximalAdagradOptimizer(args.lr)
 
-optimizer = tf.train.RMSPropOptimizer(args.lr).minimize(loss)
+optimizer = optimizer.minimize(loss)
+# elif args.optimizer == 'ADAM'
+
+    
 global_step = tf.Variable(0, name='global_step', trainable=False)
 global_epoch = tf.Variable(1, name='global_epoch', trainable=False)
 
@@ -77,36 +101,49 @@ if not args.resume:
     pickle.dump(args, open(os.path.join(args.dir, 'settings'), 'wb'))
     tf.train.export_meta_graph(os.path.join(args.dir, 'model'))
 
+graph = tf.get_default_graph()
+graph.finalize()
+
+
 start_epoch = sess.run(global_epoch)
 for epoch in range(start_epoch, args.epochs+start_epoch):
+    epoch_start_time = time.time()
+    start_time = time.time()
     # perform training
     n_trbatches = int(data.train.num_examples/args.batchsize)
     completed = 0
     total_train_loss = 0.0
     for i in range(n_trbatches):
         xs, ys = data.train.next_batch(args.batchsize)
-        _, l = sess.run([optimizer, loss], feed_dict={x: xs})
+        # if args.grayscale:
+        #     xs = tf.image.rgb_to_grayscale(xs)
+        # if args.grayscale:
+        #     xs = cv2.cvtColor(xs, cv2.COLOR_BGR2GRAY)
+        _, l = sess.run([optimizer, loss], feed_dict={x_input: xs})
         total_train_loss += l
         completed += args.batchsize
-        sess.run(global_step.assign(completed + (epoch-1)*(n_trbatches*args.batchsize)))
+        # sess.run(global_step.assign(completed + (epoch-1)*(n_trbatches*args.batchsize)))
         log_files['train_loss'].write('{:05d},{:.5f}\n'.format(completed + (epoch-1)*(n_trbatches*args.batchsize), l))
         if args.interactive:
             print_progress(epoch, completed, data.train.num_examples, l)
+    end_time = time.time()
     if not args.interactive:
-        print('Epoch {}: Train loss ({:.5f})'.format(epoch, total_train_loss/n_trbatches))
+        print('Epoch {}: Train loss ({:.5f}), elapsed time {}'.format(epoch, total_train_loss/n_trbatches, end_time-start_time))
 
+    start_time = time.time()
     # perform validation
     n_valbatches = int(data.validation.num_examples/args.batchsize)
     vl = 0.0
     for i in range(n_valbatches):
         xs, ys = data.validation.next_batch(args.batchsize)
-        vl += sess.run(loss, feed_dict={x: xs})
+        vl += sess.run(loss, feed_dict={x_input: xs})
+    end_time = time.time()
     log_files['validate_loss'].write('{:05d},{:.5f}\n'.format(completed + (epoch-1)*(n_trbatches*args.batchsize), vl/n_valbatches))
     if args.interactive:
         sys.stdout.write(', validation: {:.4f}'.format(vl/n_valbatches))
         sys.stdout.write('\r\n')
     else:
-        print('Epoch {}: Validation loss ({:.5f})'.format(epoch, vl/n_valbatches))
+        print('Epoch {}: Validation loss ({:.5f}), elapsed time {}'.format(epoch, vl/n_valbatches, end_time - start_time))
 
     # montage
     if args.interactive:
@@ -120,15 +157,16 @@ for epoch in range(start_epoch, args.epochs+start_epoch):
     # examples = np.reshape(examples, (args.examples, 64*64*3))
     # examples = np.reshape(examples, (args.examples, 64*64))
     # examples = tf.image
-    row = generate_example_row(data, y_hat, examples, epoch==1, sess, x)
+    row = generate_example_row(data, y_hat, examples, epoch==1, sess, x_input, args.grayscale)
+    # print('row:', row.shape)
     imgfile = os.path.join(args.dir, 'images', 'montage_{:03d}.png'.format(epoch))
     cv2.imwrite(imgfile, row)
-    montage = row if montage is None else np.vstack((montage, row))
+    montage = np.squeeze(row) if montage is None else np.vstack((montage, row))
     if args.interactive:
         sys.stdout.write('complete!\r\n')
         sys.stdout.flush()
 
-    sess.run(global_epoch.assign(epoch+1))
+    # sess.run(global_epoch.assign(epoch+1))
         
     # snapshot
     if args.interactive:
@@ -140,6 +178,8 @@ for epoch in range(start_epoch, args.epochs+start_epoch):
     if args.interactive:
         sys.stdout.write('complete!\r\n')
         sys.stdout.flush()
+    epoch_end_time = time.time()
+    print('Total elapsed epoch time: {}'.format(epoch_end_time - epoch_start_time))
 
 # save complete montage
 cv2.imwrite(os.path.join(args.dir, 'images', 'montage.png'), montage)
@@ -150,7 +190,7 @@ tel = 0.0
 completed = 0
 for i in range(n_tebatches):
     xs, ys = data.test.next_batch(args.batchsize)
-    tel += sess.run(loss, feed_dict={x: xs})
+    tel += sess.run(loss, feed_dict={x_input: xs})
     completed += args.batchsize
     if args.interactive:
         sys.stdout.write('\r')
