@@ -21,6 +21,14 @@ class Dataset:
         return (x, None)
         # return (np.reshape(x, (batch_size, 64*64*3)), None)
 
+    @property
+    def images(self):
+        return self.dataset
+
+    @property
+    def labels(self):
+        return None
+
 
 class Floorplans:
     def __init__(self, root_dir='/mnt/research/datasets/floorplans/'):
@@ -59,41 +67,38 @@ def _fc_layer(x, x_size, y_size):
 
 def simple_fc(x, layer_sizes):
     orig_shape = list(x.get_shape())
-    # print(x)
-    # print(orig_shape)
 
-    # flatten
-    x = tf.contrib.layers.flatten(x)
-    flattened_size = int(list(x.get_shape())[1])
-    
-    # x = tf.reshape(x, [-1])
-    # print(x)
-    print('input layer:', x, x.get_shape())
+    with tf.variable_scope('input'):
+        # flatten        
+        x = tf.contrib.layers.flatten(x)
+        flattened_size = int(list(x.get_shape())[1])
+        print('input layer:', x, x.get_shape())
+        
+    with tf.variable_scope('encoder'):
+        # encoder
+        for size in layer_sizes:
+            s = int(list(x.get_shape())[1])
+            x = _fc_layer(x, s, size)
+            print('encoder:', x, x.get_shape())
 
-    # encoder
-    for size in layer_sizes:
-        s = int(list(x.get_shape())[1])
-        x = _fc_layer(x, s, size)
-        print('encoder:', x, x.get_shape())
+    with tf.variable_scope('decoder'):
+        # decoder
+        # layer_sizes = list(reversed(layer_sizes[1:]))
+        # print('layer_sizes:', layer_sizes, layer_sizes[1::-1][1:])
+        for size in layer_sizes[1::-1][1:]:
+            s = int(list(x.get_shape())[1])
+            x = _fc_layer(x, s, size)
+            print('decoder:', x, x.get_shape())
 
-    # decoder
-    layer_sizes = reversed(layer_sizes[1:])
-    for size in layer_sizes:
-        s = int(list(x.get_shape())[1])
-        x = _fc_layer(x, s, size)
-        print('decoder:', x, x.get_shape())
+        x = _fc_layer(x, int(list(x.get_shape())[1]), flattened_size)
+        print('final layer:', x, x.get_shape())
 
-     
-    x = _fc_layer(x, int(list(x.get_shape())[1]), flattened_size)
-                      
-                      
-    print('final layer:', x, x.get_shape())
-
-    # unflatten
-    l = list(orig_shape)[1:]
-    l = [-1, int(l[0]), int(l[1]), int(l[2])]
-    print('reshape:', l)
-    x = tf.reshape(x, l)
+    with tf.variable_scope('output'):
+        # unflatten
+        l = list(orig_shape)[1:]
+        l = [-1, int(l[0]), int(l[1]), int(l[2])]
+        print('reshape:', l)
+        x = tf.reshape(x, l)
 
     return x
 #+end_src
@@ -162,26 +167,30 @@ import tensorflow as tf
 import os
 import sys
 import cv2
+import shutil
 from data import Floorplans
+
 #+end_src
 ** Logging
 #+begin_src python :tangle util.py
 # helper functions
-def generate_example_row(data, tensor, xs, include_actual, sess, x_input, grayscale=False):
+def generate_example_row(data, tensor, xs, include_actual, sess, x_input, args):
     examples = sess.run(tensor, feed_dict={x_input: xs})
     montage = None
     for i, pred in enumerate(examples):
 
         if include_actual:
-            if grayscale:
-                input_img = cv2.cvtColor(data.test.dataset[i], cv2.COLOR_BGR2GRAY)
+            if args.grayscale:
+                input_img = cv2.cvtColor(data.test.images[i], cv2.COLOR_BGR2GRAY)
                 pred = np.squeeze(pred)
             else:
-                input_img = data.test.dataset[i]
-            # print('pred:', pred.shape, 'input_img:', input_img.shape)
+                input_img = data.test.images[i]
+            if args.dataset == 'mnist':
+                input_img = np.reshape(input_img, [28, 28, 1])
+            print('pred:', pred.shape, 'input_img:', input_img.shape)
             v = np.vstack((input_img * 255.0, pred * 255.0))
         else:
-            if grayscale:
+            if args.grayscale:
                 pred = np.squeeze(pred)
             v = pred * 255.0
         montage = v if montage is None else np.hstack((montage, v))
@@ -203,10 +212,16 @@ def get_dataset(name):
         return Floorplans()
 
 
-def prep_workspace(dirname):
+def prep_workspace(dirname, fresh):
     subdirs = [os.path.join(dirname, "checkpoints"),
                os.path.join(dirname, "images"),
                os.path.join(dirname, "logs")]
+
+    # # yikes... this is probably not a good idea
+    # if fresh and os.path.exists(dirname):
+    #     shutil.rmtree(dirname)
+    #     # os.rmtree(dirname)
+        
     if not os.path.exists(dirname):
         os.makedirs(dirname)
     for d in subdirs:
@@ -220,6 +235,18 @@ def prep_workspace(dirname):
 
 def plot_loss(image_dir):
     pass
+
+
+def visualize_parameters():
+    total_params = 0
+    for variable in tf.trainable_variables():
+        shape = variable.get_shape()
+        num_params = 1
+        for dim in shape:
+            num_params *= dim.value
+        total_params += num_params
+        print('Variable name: {}, size: {}, shape: {}'.format(variable.name, num_params, variable.get_shape()))
+    return total_params
 #+end_src
 
 * Callbacks
@@ -256,6 +283,9 @@ parser.add_argument('--grayscale', default=False, action='store_true')
 parser.add_argument('--loss', type=str, default='l1')
 parser.add_argument('--optimizer', type=str, default='RMSProp')
 parser.add_argument('--momentum', type=float, default=0.01)
+parser.add_argument('--fresh', default=False, action='store_true')
+parser.add_argument('--decay', type=float, default=0.9)
+parser.add_argument('--centered', default=False, action='store_true')
 args = parser.parse_args()
 #+end_src
 ** Setup
@@ -263,23 +293,54 @@ args = parser.parse_args()
 # for repeatability purposes
 random.seed(args.seed)
 
+
+
 # model
 sess = tf.Session()
 # x = tf.placeholder("float", [None, 64, 64, 3])
 
-x_input = tf.placeholder("float", [None, 64, 64, 3])
-if args.grayscale:
-    x = tf.image.rgb_to_grayscale(x_input)
-else:
-    x = x_input
+
+# dataset
+# TODO: load this last? need the dataset size info though for model creation
+data = get_dataset(args.dataset)
+# print(data.train)
+# print(data.train.__dict__)
+print('SAMPLE IMAGE', data.train.images[0].shape)
+
+# sample_image = data.train.dataset[:1]
+# print('sample image:', sample_image.shape)
+
+
+# if args.dataset == 'mnist':
+#     pass
+# elif args.dataset == 'floorplan':
+#     pass
+
+
+if args.dataset == 'mnist':
+    x_input = tf.placeholder("float", [None, 784])
+    x = tf.reshape(x_input, [-1, 28, 28, 1])
+elif args.dataset == 'floorplan':
+    x_input = tf.placeholder("float", [None, 64, 64, 3])
+    if args.grayscale:
+        x = tf.image.rgb_to_grayscale(x_input)
+    else:
+        x = x_input
+
+# x_input = tf.placeholder("float", [None, 64, 64, 3])
+# x_input = tf.placeholder("float", [None, 784])
+
+# if args.grayscale:
+#     x = tf.image.rgb_to_grayscale(x_input)
+# else:
+#     x = x_input
     
 if args.model == 'fc':
     y_hat = simple_fc(x, args.layers)
 elif args.model == 'cnn':
     y_hat = simple_cnn(x, args.layers)
 
-# dataset
-data = get_dataset(args.dataset)
+
 
     
 # loss
@@ -296,7 +357,7 @@ elif args.loss == 'crossentropy':
 
 # optimizer
 if args.optimizer == 'RMSProp':
-    optimizer = tf.train.RMSPropOptimizer(args.lr)
+    optimizer = tf.train.RMSPropOptimizer(args.lr, args.decay, args.momentum, centered=args.centered)
 elif args.optimizer == 'Adadelta':
     optimizer = tf.train.AdadeltaOptimizer(args.lr)
 elif args.optimizer == 'GD':
@@ -332,7 +393,7 @@ if args.resume:
     print('Model restored. Global step:', sess.run(global_step))
         
 # workspace
-log_files = prep_workspace(args.dir)
+log_files = prep_workspace(args.dir, args.fresh)
 if not args.resume:
     pickle.dump(args, open(os.path.join(args.dir, 'settings'), 'wb'))
     tf.train.export_meta_graph(os.path.join(args.dir, 'model'))
@@ -344,6 +405,9 @@ if not args.resume:
 #+begin_src python :tangle main.py
 graph = tf.get_default_graph()
 graph.finalize()
+
+total_params = visualize_parameters()
+print('Total params: {}'.format(total_params))
 
 
 start_epoch = sess.run(global_epoch)
@@ -392,17 +456,22 @@ for epoch in range(start_epoch, args.epochs+start_epoch):
     else:
         print('Generating examples to disk...')
     # TODO: should reshape this on the fly, and only if necessary
-    examples = data.test.dataset[:args.examples]
+    examples = data.test.images[:args.examples]
+    # if args.dataset == 'mnist':
+    #     examples = data.test.images[:args.examples]
+    # else:
+    #     examples = data.test.dataset[:args.examples]
     # tf.reshape(tf.image.rgb_to_grayscale(x), (-1, 64*64))
         
     # examples = np.reshape(examples, (args.examples, 64*64*3))
     # examples = np.reshape(examples, (args.examples, 64*64))
     # examples = tf.image
-    row = generate_example_row(data, y_hat, examples, epoch==1, sess, x_input, args.grayscale)
-    # print('row:', row.shape)
+    row = generate_example_row(data, y_hat, examples, epoch==1, sess, x_input, args)
+    if montage is not None:
+        print('row:', row.shape, 'montage:', montage.shape)
     imgfile = os.path.join(args.dir, 'images', 'montage_{:03d}.png'.format(epoch))
     cv2.imwrite(imgfile, row)
-    montage = np.squeeze(row) if montage is None else np.vstack((montage, row))
+    montage = row if montage is None else np.vstack((montage, row))
     if args.interactive:
         sys.stdout.write('complete!\r\n')
         sys.stdout.flush()

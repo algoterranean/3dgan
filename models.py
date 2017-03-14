@@ -8,41 +8,38 @@ def _fc_layer(x, x_size, y_size):
 
 def simple_fc(x, layer_sizes):
     orig_shape = list(x.get_shape())
-    # print(x)
-    # print(orig_shape)
 
-    # flatten
-    x = tf.contrib.layers.flatten(x)
-    flattened_size = int(list(x.get_shape())[1])
-    
-    # x = tf.reshape(x, [-1])
-    # print(x)
-    print('input layer:', x, x.get_shape())
+    with tf.variable_scope('input'):
+        # flatten        
+        x = tf.contrib.layers.flatten(x)
+        flattened_size = int(list(x.get_shape())[1])
+        print('input layer:', x, x.get_shape())
+        
+    with tf.variable_scope('encoder'):
+        # encoder
+        for size in layer_sizes:
+            s = int(list(x.get_shape())[1])
+            x = _fc_layer(x, s, size)
+            print('encoder:', x, x.get_shape())
 
-    # encoder
-    for size in layer_sizes:
-        s = int(list(x.get_shape())[1])
-        x = _fc_layer(x, s, size)
-        print('encoder:', x, x.get_shape())
+    with tf.variable_scope('decoder'):
+        # decoder
+        # layer_sizes = list(reversed(layer_sizes[1:]))
+        # print('layer_sizes:', layer_sizes, layer_sizes[1::-1][1:])
+        for size in layer_sizes[1::-1][1:]:
+            s = int(list(x.get_shape())[1])
+            x = _fc_layer(x, s, size)
+            print('decoder:', x, x.get_shape())
 
-    # decoder
-    layer_sizes = reversed(layer_sizes[1:])
-    for size in layer_sizes:
-        s = int(list(x.get_shape())[1])
-        x = _fc_layer(x, s, size)
-        print('decoder:', x, x.get_shape())
+        x = _fc_layer(x, int(list(x.get_shape())[1]), flattened_size)
+        print('final layer:', x, x.get_shape())
 
-     
-    x = _fc_layer(x, int(list(x.get_shape())[1]), flattened_size)
-                      
-                      
-    print('final layer:', x, x.get_shape())
-
-    # unflatten
-    l = list(orig_shape)[1:]
-    l = [-1, int(l[0]), int(l[1]), int(l[2])]
-    print('reshape:', l)
-    x = tf.reshape(x, l)
+    with tf.variable_scope('output'):
+        # unflatten
+        l = list(orig_shape)[1:]
+        l = [-1, int(l[0]), int(l[1]), int(l[2])]
+        print('reshape:', l)
+        x = tf.reshape(x, l)
 
     return x
 

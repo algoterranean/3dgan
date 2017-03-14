@@ -12,7 +12,18 @@
   - State "DONE"       from "STARTED"    [2017-03-11 Sat 16:00]
   - State "STARTED"    from "TODO"       [2017-03-11 Sat 16:00]
 * TODO Add option to use partial dataset per epoch, or to do validation more frequently than per epoch
-* TODO Add option for loss function
-* TODO Add option for model
-
-
+* DONE Add option for loss function
+  CLOSED: [2017-03-11 Sat 18:31]
+  - State "DONE"       from "STARTED"    [2017-03-11 Sat 18:31]
+  - State "STARTED"    from "TODO"       [2017-03-11 Sat 18:31]
+* DONE Add option for model
+  CLOSED: [2017-03-11 Sat 18:31]
+  - State "DONE"       from "STARTED"    [2017-03-11 Sat 18:31]
+  - State "STARTED"    from "TODO"       [2017-03-11 Sat 18:31]
+* TODO Add support for visualizing layers
+  - State "TODO"       from              [2017-03-11 Sat 18:31]
+* TODO Add function to visualize network architecture
+* TODO Add support for Tensboard logging
+* TODO Fix bug with MNIST support (input and output size should vary by dataset)
+* TODO Enable support for shuffling data on each epoch
+* TODO Fix bug with CNN support

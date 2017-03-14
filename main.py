@@ -22,28 +22,62 @@ parser.add_argument('--grayscale', default=False, action='store_true')
 parser.add_argument('--loss', type=str, default='l1')
 parser.add_argument('--optimizer', type=str, default='RMSProp')
 parser.add_argument('--momentum', type=float, default=0.01)
+parser.add_argument('--fresh', default=False, action='store_true')
+parser.add_argument('--decay', type=float, default=0.9)
+parser.add_argument('--centered', default=False, action='store_true')
 args = parser.parse_args()
 
 # for repeatability purposes
 random.seed(args.seed)
 
+
+
 # model
 sess = tf.Session()
 # x = tf.placeholder("float", [None, 64, 64, 3])
 
-x_input = tf.placeholder("float", [None, 64, 64, 3])
-if args.grayscale:
-    x = tf.image.rgb_to_grayscale(x_input)
-else:
-    x = x_input
+
+# dataset
+# TODO: load this last? need the dataset size info though for model creation
+data = get_dataset(args.dataset)
+# print(data.train)
+# print(data.train.__dict__)
+print('SAMPLE IMAGE', data.train.images[0].shape)
+
+# sample_image = data.train.dataset[:1]
+# print('sample image:', sample_image.shape)
+
+
+# if args.dataset == 'mnist':
+#     pass
+# elif args.dataset == 'floorplan':
+#     pass
+
+
+if args.dataset == 'mnist':
+    x_input = tf.placeholder("float", [None, 784])
+    x = tf.reshape(x_input, [-1, 28, 28, 1])
+elif args.dataset == 'floorplan':
+    x_input = tf.placeholder("float", [None, 64, 64, 3])
+    if args.grayscale:
+        x = tf.image.rgb_to_grayscale(x_input)
+    else:
+        x = x_input
+
+# x_input = tf.placeholder("float", [None, 64, 64, 3])
+# x_input = tf.placeholder("float", [None, 784])
+
+# if args.grayscale:
+#     x = tf.image.rgb_to_grayscale(x_input)
+# else:
+#     x = x_input
     
 if args.model == 'fc':
     y_hat = simple_fc(x, args.layers)
 elif args.model == 'cnn':
     y_hat = simple_cnn(x, args.layers)
 
-# dataset
-data = get_dataset(args.dataset)
+
 
     
 # loss
@@ -60,7 +94,7 @@ elif args.loss == 'crossentropy':
 
 # optimizer
 if args.optimizer == 'RMSProp':
-    optimizer = tf.train.RMSPropOptimizer(args.lr)
+    optimizer = tf.train.RMSPropOptimizer(args.lr, args.decay, args.momentum, centered=args.centered)
 elif args.optimizer == 'Adadelta':
     optimizer = tf.train.AdadeltaOptimizer(args.lr)
 elif args.optimizer == 'GD':
@@ -96,13 +130,16 @@ if args.resume:
     print('Model restored. Global step:', sess.run(global_step))
         
 # workspace
-log_files = prep_workspace(args.dir)
+log_files = prep_workspace(args.dir, args.fresh)
 if not args.resume:
     pickle.dump(args, open(os.path.join(args.dir, 'settings'), 'wb'))
     tf.train.export_meta_graph(os.path.join(args.dir, 'model'))
 
 graph = tf.get_default_graph()
 graph.finalize()
+
+total_params = visualize_parameters()
+print('Total params: {}'.format(total_params))
 
 
 start_epoch = sess.run(global_epoch)
@@ -151,17 +188,22 @@ for epoch in range(start_epoch, args.epochs+start_epoch):
     else:
         print('Generating examples to disk...')
     # TODO: should reshape this on the fly, and only if necessary
-    examples = data.test.dataset[:args.examples]
+    examples = data.test.images[:args.examples]
+    # if args.dataset == 'mnist':
+    #     examples = data.test.images[:args.examples]
+    # else:
+    #     examples = data.test.dataset[:args.examples]
     # tf.reshape(tf.image.rgb_to_grayscale(x), (-1, 64*64))
         
     # examples = np.reshape(examples, (args.examples, 64*64*3))
     # examples = np.reshape(examples, (args.examples, 64*64))
     # examples = tf.image
-    row = generate_example_row(data, y_hat, examples, epoch==1, sess, x_input, args.grayscale)
-    # print('row:', row.shape)
+    row = generate_example_row(data, y_hat, examples, epoch==1, sess, x_input, args)
+    if montage is not None:
+        print('row:', row.shape, 'montage:', montage.shape)
     imgfile = os.path.join(args.dir, 'images', 'montage_{:03d}.png'.format(epoch))
     cv2.imwrite(imgfile, row)
-    montage = np.squeeze(row) if montage is None else np.vstack((montage, row))
+    montage = row if montage is None else np.vstack((montage, row))
     if args.interactive:
         sys.stdout.write('complete!\r\n')
         sys.stdout.flush()

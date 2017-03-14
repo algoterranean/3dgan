@@ -1,4 +1,962 @@
 
+* Tests
+** 4096 -> 1024
+*** RMSProp
+    Learning rate = 0.1
+    #+begin_src sh :results output
+    python main.py --dataset floorplan --layers 4096 1024 --dir workspace/tests/rmsprop3 --epochs 10 --model fc --loss rmse --optimizer RMSProp --lr 0.1
+    #+end_src
+
+    #+RESULTS:
+    #+begin_example
+    Loading dataset...
+    SAMPLE IMAGE (64, 64, 3)
+    input layer: Tensor("input/Flatten/Reshape:0", shape=(?, 12288), dtype=float32) (?, 12288)
+    encoder: Tensor("encoder/Sigmoid:0", shape=(?, 4096), dtype=float32) (?, 4096)
+    encoder: Tensor("encoder/Sigmoid_1:0", shape=(?, 1024), dtype=float32) (?, 1024)
+    decoder: Tensor("decoder/Sigmoid:0", shape=(?, 4096), dtype=float32) (?, 4096)
+    final layer: Tensor("decoder/Sigmoid_1:0", shape=(?, 12288), dtype=float32) (?, 12288)
+    reshape: [-1, 64, 64, 3]
+    Variable name: encoder/Variable:0, size: 50331648, shape: (12288, 4096)
+    Variable name: encoder/Variable_1:0, size: 4096, shape: (4096,)
+    Variable name: encoder/Variable_2:0, size: 4194304, shape: (4096, 1024)
+    Variable name: encoder/Variable_3:0, size: 1024, shape: (1024,)
+    Variable name: decoder/Variable:0, size: 4194304, shape: (1024, 4096)
+    Variable name: decoder/Variable_1:0, size: 4096, shape: (4096,)
+    Variable name: decoder/Variable_2:0, size: 50331648, shape: (4096, 12288)
+    Variable name: decoder/Variable_3:0, size: 12288, shape: (12288,)
+    Total params: 109073408
+    Epoch 1: Train loss (0.56408), elapsed time 41.102580070495605
+    Epoch 1: Validation loss (0.52988), elapsed time 2.184217929840088
+    Generating examples to disk...
+    pred: (64, 64, 3) input_img: (64, 64, 3)
+    pred: (64, 64, 3) input_img: (64, 64, 3)
+    pred: (64, 64, 3) input_img: (64, 64, 3)
+    pred: (64, 64, 3) input_img: (64, 64, 3)
+    pred: (64, 64, 3) input_img: (64, 64, 3)
+    pred: (64, 64, 3) input_img: (64, 64, 3)
+    pred: (64, 64, 3) input_img: (64, 64, 3)
+    pred: (64, 64, 3) input_img: (64, 64, 3)
+    pred: (64, 64, 3) input_img: (64, 64, 3)
+    pred: (64, 64, 3) input_img: (64, 64, 3)
+    Writing snapshot to disk...
+    Total elapsed epoch time: 45.641321420669556
+    Epoch 2: Train loss (0.52599), elapsed time 40.9741575717926
+    Epoch 2: Validation loss (0.52309), elapsed time 2.1548354625701904
+    Generating examples to disk...
+    row: (64, 640, 3) montage: (128, 640, 3)
+    Writing snapshot to disk...
+    Total elapsed epoch time: 45.21381664276123
+    Epoch 3: Train loss (0.52126), elapsed time 40.845314502716064
+    Epoch 3: Validation loss (0.51861), elapsed time 2.178740978240967
+    Generating examples to disk...
+    row: (64, 640, 3) montage: (192, 640, 3)
+    Writing snapshot to disk...
+    Total elapsed epoch time: 45.03376364707947
+    Epoch 4: Train loss (0.51679), elapsed time 43.089322566986084
+    Epoch 4: Validation loss (0.51538), elapsed time 2.4173173904418945
+    Generating examples to disk...
+    row: (64, 640, 3) montage: (256, 640, 3)
+    Writing snapshot to disk...
+    Total elapsed epoch time: 47.607600927352905
+    Epoch 5: Train loss (0.51436), elapsed time 42.98776626586914
+    Epoch 5: Validation loss (0.51376), elapsed time 2.426104784011841
+    Generating examples to disk...
+    row: (64, 640, 3) montage: (320, 640, 3)
+    Writing snapshot to disk...
+    Total elapsed epoch time: 47.44592881202698
+    Epoch 6: Train loss (0.51298), elapsed time 43.44009447097778
+    Epoch 6: Validation loss (0.51271), elapsed time 2.512977123260498
+    Generating examples to disk...
+    row: (64, 640, 3) montage: (384, 640, 3)
+    Writing snapshot to disk...
+    Total elapsed epoch time: 48.15242385864258
+    Epoch 7: Train loss (0.51176), elapsed time 43.31863355636597
+    Epoch 7: Validation loss (0.51084), elapsed time 2.475665330886841
+    Generating examples to disk...
+    row: (64, 640, 3) montage: (448, 640, 3)
+    Writing snapshot to disk...
+    Total elapsed epoch time: 48.312249422073364
+    Epoch 8: Train loss (0.51005), elapsed time 43.819920778274536
+    Epoch 8: Validation loss (0.50975), elapsed time 2.564354419708252
+    Generating examples to disk...
+    row: (64, 640, 3) montage: (512, 640, 3)
+    Writing snapshot to disk...
+    Total elapsed epoch time: 48.53280210494995
+    Epoch 9: Train loss (0.50909), elapsed time 43.16045022010803
+    Epoch 9: Validation loss (0.50867), elapsed time 2.565683603286743
+    Generating examples to disk...
+    row: (64, 640, 3) montage: (576, 640, 3)
+    Writing snapshot to disk...
+    Total elapsed epoch time: 47.94984316825867
+    Epoch 10: Train loss (0.50732), elapsed time 43.93446445465088
+    Epoch 10: Validation loss (0.50693), elapsed time 2.4804069995880127
+    Generating examples to disk...
+    row: (64, 640, 3) montage: (640, 640, 3)
+    Writing snapshot to disk...
+    Total elapsed epoch time: 48.601516008377075
+    Test loss: 0.50677
+#+end_example
+
+*** RMSProp
+    Learning rate = 0.01
+    #+begin_src sh :results output
+python main.py --dataset floorplan --layers 4096 1024 --dir workspace/tests/rmsprop --epochs 10 --model fc --loss rmse --optimizer RMSProp
+    #+end_src
+
+    #+RESULTS:
+    #+begin_example
+    Loading dataset...
+    SAMPLE IMAGE (64, 64, 3)
+    input layer: Tensor("input/Flatten/Reshape:0", shape=(?, 12288), dtype=float32) (?, 12288)
+    encoder: Tensor("encoder/Sigmoid:0", shape=(?, 4096), dtype=float32) (?, 4096)
+    encoder: Tensor("encoder/Sigmoid_1:0", shape=(?, 1024), dtype=float32) (?, 1024)
+    decoder: Tensor("decoder/Sigmoid:0", shape=(?, 4096), dtype=float32) (?, 4096)
+    final layer: Tensor("decoder/Sigmoid_1:0", shape=(?, 12288), dtype=float32) (?, 12288)
+    reshape: [-1, 64, 64, 3]
+    Variable name: encoder/Variable:0, size: 50331648, shape: (12288, 4096)
+    Variable name: encoder/Variable_1:0, size: 4096, shape: (4096,)
+    Variable name: encoder/Variable_2:0, size: 4194304, shape: (4096, 1024)
+    Variable name: encoder/Variable_3:0, size: 1024, shape: (1024,)
+    Variable name: decoder/Variable:0, size: 4194304, shape: (1024, 4096)
+    Variable name: decoder/Variable_1:0, size: 4096, shape: (4096,)
+    Variable name: decoder/Variable_2:0, size: 50331648, shape: (4096, 12288)
+    Variable name: decoder/Variable_3:0, size: 12288, shape: (12288,)
+    Total params: 109073408
+    Epoch 1: Train loss (0.57768), elapsed time 41.02337050437927
+    Epoch 1: Validation loss (0.54207), elapsed time 2.1295180320739746
+    Generating examples to disk...
+    pred: (64, 64, 3) input_img: (64, 64, 3)
+    pred: (64, 64, 3) input_img: (64, 64, 3)
+    pred: (64, 64, 3) input_img: (64, 64, 3)
+    pred: (64, 64, 3) input_img: (64, 64, 3)
+    pred: (64, 64, 3) input_img: (64, 64, 3)
+    pred: (64, 64, 3) input_img: (64, 64, 3)
+    pred: (64, 64, 3) input_img: (64, 64, 3)
+    pred: (64, 64, 3) input_img: (64, 64, 3)
+    pred: (64, 64, 3) input_img: (64, 64, 3)
+    pred: (64, 64, 3) input_img: (64, 64, 3)
+    Writing snapshot to disk...
+    Total elapsed epoch time: 45.50636410713196
+    Epoch 2: Train loss (0.54137), elapsed time 40.96237659454346
+    Epoch 2: Validation loss (0.54093), elapsed time 2.138939619064331
+    Generating examples to disk...
+    row: (64, 640, 3) montage: (128, 640, 3)
+    Writing snapshot to disk...
+    Total elapsed epoch time: 45.16375684738159
+    Epoch 3: Train loss (0.54042), elapsed time 40.80886173248291
+    Epoch 3: Validation loss (0.54033), elapsed time 2.1343636512756348
+    Generating examples to disk...
+    row: (64, 640, 3) montage: (192, 640, 3)
+    Writing snapshot to disk...
+    Total elapsed epoch time: 44.9083456993103
+    Epoch 4: Train loss (0.53975), elapsed time 41.048967599868774
+    Epoch 4: Validation loss (0.53946), elapsed time 2.1197896003723145
+    Generating examples to disk...
+    row: (64, 640, 3) montage: (256, 640, 3)
+    Writing snapshot to disk...
+    Total elapsed epoch time: 45.24590563774109
+    Epoch 5: Train loss (0.53909), elapsed time 41.0499312877655
+    Epoch 5: Validation loss (0.53898), elapsed time 2.133643865585327
+    Generating examples to disk...
+    row: (64, 640, 3) montage: (320, 640, 3)
+    Writing snapshot to disk...
+    Total elapsed epoch time: 45.17192363739014
+    Epoch 6: Train loss (0.53880), elapsed time 40.943265438079834
+    Epoch 6: Validation loss (0.53878), elapsed time 2.1649281978607178
+    Generating examples to disk...
+    row: (64, 640, 3) montage: (384, 640, 3)
+    Writing snapshot to disk...
+    Total elapsed epoch time: 45.3111207485199
+    Epoch 7: Train loss (0.53842), elapsed time 40.990720987319946
+    Epoch 7: Validation loss (0.53843), elapsed time 2.127938985824585
+    Generating examples to disk...
+    row: (64, 640, 3) montage: (448, 640, 3)
+    Writing snapshot to disk...
+    Total elapsed epoch time: 45.27238607406616
+    Epoch 8: Train loss (0.53807), elapsed time 40.81696939468384
+    Epoch 8: Validation loss (0.53799), elapsed time 2.193159341812134
+    Generating examples to disk...
+    row: (64, 640, 3) montage: (512, 640, 3)
+    Writing snapshot to disk...
+    Total elapsed epoch time: 45.13917016983032
+    Epoch 9: Train loss (0.53771), elapsed time 41.08096122741699
+    Epoch 9: Validation loss (0.53775), elapsed time 2.168968439102173
+    Generating examples to disk...
+    row: (64, 640, 3) montage: (576, 640, 3)
+    Writing snapshot to disk...
+    Total elapsed epoch time: 45.69702672958374
+    Epoch 10: Train loss (0.53744), elapsed time 40.85895371437073
+    Epoch 10: Validation loss (0.53735), elapsed time 2.138474702835083
+    Generating examples to disk...
+    row: (64, 640, 3) montage: (640, 640, 3)
+    Writing snapshot to disk...
+    Total elapsed epoch time: 45.099294900894165
+    Test loss: 0.53722
+#+end_example
+
+*** RMSProp
+    Learning rate = 0.001
+    #+begin_src sh :results output
+    python main.py --dataset floorplan --layers 4096 1024 --dir workspace/tests/rmsprop2 --epochs 10 --model fc --loss rmse --optimizer RMSProp --lr 0.001
+    #+end_src
+
+    #+RESULTS:
+    #+begin_example
+    Loading dataset...
+    SAMPLE IMAGE (64, 64, 3)
+    input layer: Tensor("input/Flatten/Reshape:0", shape=(?, 12288), dtype=float32) (?, 12288)
+    encoder: Tensor("encoder/Sigmoid:0", shape=(?, 4096), dtype=float32) (?, 4096)
+    encoder: Tensor("encoder/Sigmoid_1:0", shape=(?, 1024), dtype=float32) (?, 1024)
+    decoder: Tensor("decoder/Sigmoid:0", shape=(?, 4096), dtype=float32) (?, 4096)
+    final layer: Tensor("decoder/Sigmoid_1:0", shape=(?, 12288), dtype=float32) (?, 12288)
+    reshape: [-1, 64, 64, 3]
+    Variable name: encoder/Variable:0, size: 50331648, shape: (12288, 4096)
+    Variable name: encoder/Variable_1:0, size: 4096, shape: (4096,)
+    Variable name: encoder/Variable_2:0, size: 4194304, shape: (4096, 1024)
+    Variable name: encoder/Variable_3:0, size: 1024, shape: (1024,)
+    Variable name: decoder/Variable:0, size: 4194304, shape: (1024, 4096)
+    Variable name: decoder/Variable_1:0, size: 4096, shape: (4096,)
+    Variable name: decoder/Variable_2:0, size: 50331648, shape: (4096, 12288)
+    Variable name: decoder/Variable_3:0, size: 12288, shape: (12288,)
+    Total params: 109073408
+    Epoch 1: Train loss (0.59073), elapsed time 41.23558855056763
+    Epoch 1: Validation loss (0.54505), elapsed time 2.1818389892578125
+    Generating examples to disk...
+    pred: (64, 64, 3) input_img: (64, 64, 3)
+    pred: (64, 64, 3) input_img: (64, 64, 3)
+    pred: (64, 64, 3) input_img: (64, 64, 3)
+    pred: (64, 64, 3) input_img: (64, 64, 3)
+    pred: (64, 64, 3) input_img: (64, 64, 3)
+    pred: (64, 64, 3) input_img: (64, 64, 3)
+    pred: (64, 64, 3) input_img: (64, 64, 3)
+    pred: (64, 64, 3) input_img: (64, 64, 3)
+    pred: (64, 64, 3) input_img: (64, 64, 3)
+    pred: (64, 64, 3) input_img: (64, 64, 3)
+    Writing snapshot to disk...
+    Total elapsed epoch time: 45.806854009628296
+    Epoch 2: Train loss (0.54383), elapsed time 41.07651925086975
+    Epoch 2: Validation loss (0.54318), elapsed time 2.165975570678711
+    Generating examples to disk...
+    row: (64, 640, 3) montage: (128, 640, 3)
+    Writing snapshot to disk...
+    Total elapsed epoch time: 45.289278745651245
+    Epoch 3: Train loss (0.54289), elapsed time 40.84050631523132
+    Epoch 3: Validation loss (0.54291), elapsed time 2.1208784580230713
+    Generating examples to disk...
+    row: (64, 640, 3) montage: (192, 640, 3)
+    Writing snapshot to disk...
+    Total elapsed epoch time: 45.08452033996582
+    Epoch 4: Train loss (0.54238), elapsed time 40.92768144607544
+    Epoch 4: Validation loss (0.54208), elapsed time 2.2020041942596436
+    Generating examples to disk...
+    row: (64, 640, 3) montage: (256, 640, 3)
+    Writing snapshot to disk...
+    Total elapsed epoch time: 45.173760414123535
+    Epoch 5: Train loss (0.54163), elapsed time 41.1031551361084
+    Epoch 5: Validation loss (0.54161), elapsed time 2.1786439418792725
+    Generating examples to disk...
+    row: (64, 640, 3) montage: (320, 640, 3)
+    Writing snapshot to disk...
+    Total elapsed epoch time: 45.34756112098694
+    Epoch 6: Train loss (0.54114), elapsed time 41.102128744125366
+    Epoch 6: Validation loss (0.54103), elapsed time 2.1805827617645264
+    Generating examples to disk...
+    row: (64, 640, 3) montage: (384, 640, 3)
+    Writing snapshot to disk...
+    Total elapsed epoch time: 45.49219465255737
+    Epoch 7: Train loss (0.54070), elapsed time 40.878175497055054
+    Epoch 7: Validation loss (0.54066), elapsed time 2.162654161453247
+    Generating examples to disk...
+    row: (64, 640, 3) montage: (448, 640, 3)
+    Writing snapshot to disk...
+    Total elapsed epoch time: 45.244075298309326
+    Epoch 8: Train loss (0.54044), elapsed time 41.06623101234436
+    Epoch 8: Validation loss (0.54051), elapsed time 2.1798739433288574
+    Generating examples to disk...
+    row: (64, 640, 3) montage: (512, 640, 3)
+    Writing snapshot to disk...
+    Total elapsed epoch time: 45.39750337600708
+    Epoch 9: Train loss (0.54024), elapsed time 41.11474871635437
+    Epoch 9: Validation loss (0.54016), elapsed time 2.1934642791748047
+    Generating examples to disk...
+    row: (64, 640, 3) montage: (576, 640, 3)
+    Writing snapshot to disk...
+    Total elapsed epoch time: 45.569000005722046
+    Epoch 10: Train loss (0.53987), elapsed time 41.088813066482544
+    Epoch 10: Validation loss (0.53991), elapsed time 2.1032047271728516
+    Generating examples to disk...
+    row: (64, 640, 3) montage: (640, 640, 3)
+    Writing snapshot to disk...
+    Total elapsed epoch time: 45.604758977890015
+    Test loss: 0.53979
+#+end_example
+
+
+
+*** RMSProp
+    Learning rate = 0.1
+    Decay = 0.9
+    Momentum = 0.01
+    Centered = True
+    #+begin_src sh :results output
+    python main.py --dataset floorplan --layers 4096 1024 --dir workspace/tests/rmsprop4 --epochs 10 --model fc --loss rmse --optimizer RMSProp --lr 0.1 --centered
+    #+end_src
+
+    #+RESULTS:
+    #+begin_example
+    Loading dataset...
+    SAMPLE IMAGE (64, 64, 3)
+    input layer: Tensor("input/Flatten/Reshape:0", shape=(?, 12288), dtype=float32) (?, 12288)
+    encoder: Tensor("encoder/Sigmoid:0", shape=(?, 4096), dtype=float32) (?, 4096)
+    encoder: Tensor("encoder/Sigmoid_1:0", shape=(?, 1024), dtype=float32) (?, 1024)
+    decoder: Tensor("decoder/Sigmoid:0", shape=(?, 4096), dtype=float32) (?, 4096)
+    final layer: Tensor("decoder/Sigmoid_1:0", shape=(?, 12288), dtype=float32) (?, 12288)
+    reshape: [-1, 64, 64, 3]
+    Variable name: encoder/Variable:0, size: 50331648, shape: (12288, 4096)
+    Variable name: encoder/Variable_1:0, size: 4096, shape: (4096,)
+    Variable name: encoder/Variable_2:0, size: 4194304, shape: (4096, 1024)
+    Variable name: encoder/Variable_3:0, size: 1024, shape: (1024,)
+    Variable name: decoder/Variable:0, size: 4194304, shape: (1024, 4096)
+    Variable name: decoder/Variable_1:0, size: 4096, shape: (4096,)
+    Variable name: decoder/Variable_2:0, size: 50331648, shape: (4096, 12288)
+    Variable name: decoder/Variable_3:0, size: 12288, shape: (12288,)
+    Total params: 109073408
+    Epoch 1: Train loss (0.56613), elapsed time 46.3017635345459
+    Epoch 1: Validation loss (0.53081), elapsed time 2.1082212924957275
+    Generating examples to disk...
+    pred: (64, 64, 3) input_img: (64, 64, 3)
+    pred: (64, 64, 3) input_img: (64, 64, 3)
+    pred: (64, 64, 3) input_img: (64, 64, 3)
+    pred: (64, 64, 3) input_img: (64, 64, 3)
+    pred: (64, 64, 3) input_img: (64, 64, 3)
+    pred: (64, 64, 3) input_img: (64, 64, 3)
+    pred: (64, 64, 3) input_img: (64, 64, 3)
+    pred: (64, 64, 3) input_img: (64, 64, 3)
+    pred: (64, 64, 3) input_img: (64, 64, 3)
+    pred: (64, 64, 3) input_img: (64, 64, 3)
+    Writing snapshot to disk...
+    Total elapsed epoch time: 51.453579902648926
+    Epoch 2: Train loss (0.52563), elapsed time 45.87726664543152
+    Epoch 2: Validation loss (0.52320), elapsed time 2.167675018310547
+    Generating examples to disk...
+    row: (64, 640, 3) montage: (128, 640, 3)
+    Writing snapshot to disk...
+    Total elapsed epoch time: 51.141215801239014
+    Epoch 3: Train loss (0.51886), elapsed time 46.24248695373535
+    Epoch 3: Validation loss (0.51759), elapsed time 2.1580233573913574
+    Generating examples to disk...
+    row: (64, 640, 3) montage: (192, 640, 3)
+    Writing snapshot to disk...
+    Total elapsed epoch time: 51.46267771720886
+    Epoch 4: Train loss (0.51650), elapsed time 46.29403281211853
+    Epoch 4: Validation loss (0.51504), elapsed time 2.153130531311035
+    Generating examples to disk...
+    row: (64, 640, 3) montage: (256, 640, 3)
+    Writing snapshot to disk...
+    Total elapsed epoch time: 51.29607558250427
+    Epoch 5: Train loss (0.51347), elapsed time 46.30939507484436
+    Epoch 5: Validation loss (0.51213), elapsed time 2.1593241691589355
+    Generating examples to disk...
+    row: (64, 640, 3) montage: (320, 640, 3)
+    Writing snapshot to disk...
+    Total elapsed epoch time: 51.5392541885376
+    Epoch 6: Train loss (0.51064), elapsed time 46.24050498008728
+    Epoch 6: Validation loss (0.50972), elapsed time 2.1981303691864014
+    Generating examples to disk...
+    row: (64, 640, 3) montage: (384, 640, 3)
+    Writing snapshot to disk...
+    Total elapsed epoch time: 51.326271772384644
+    Epoch 7: Train loss (0.50917), elapsed time 46.281843423843384
+    Epoch 7: Validation loss (0.50847), elapsed time 2.186786413192749
+    Generating examples to disk...
+    row: (64, 640, 3) montage: (448, 640, 3)
+    Writing snapshot to disk...
+    Total elapsed epoch time: 51.5385799407959
+    Epoch 8: Train loss (0.50691), elapsed time 46.190202474594116
+    Epoch 8: Validation loss (0.50638), elapsed time 2.1896636486053467
+    Generating examples to disk...
+    row: (64, 640, 3) montage: (512, 640, 3)
+    Writing snapshot to disk...
+    Total elapsed epoch time: 51.29394555091858
+    Epoch 9: Train loss (0.50580), elapsed time 46.123592376708984
+    Epoch 9: Validation loss (0.50534), elapsed time 2.1498148441314697
+    Generating examples to disk...
+    row: (64, 640, 3) montage: (576, 640, 3)
+    Writing snapshot to disk...
+    Total elapsed epoch time: 51.51894664764404
+    Epoch 10: Train loss (0.50394), elapsed time 46.172619104385376
+    Epoch 10: Validation loss (0.50338), elapsed time 2.1567530632019043
+    Generating examples to disk...
+    row: (64, 640, 3) montage: (640, 640, 3)
+    Writing snapshot to disk...
+    Total elapsed epoch time: 51.93852400779724
+    Test loss: 0.50325
+#+end_example
+
+
+*** RMSProp
+    Learning rate = 0.1
+    Decay = 0.7
+    Momentum = 0.1
+    Centered = True
+    #+begin_src sh :results output
+    python main.py --dataset floorplan --layers 4096 1024 --dir workspace/tests/rmsprop6 --epochs 40 --model fc --loss rmse --optimizer RMSProp --lr 0.1 --centered --decay 0.7 --momentum 0.1
+    #+end_src
+
+    #+RESULTS:
+    #+begin_example
+    Loading dataset...
+    SAMPLE IMAGE (64, 64, 3)
+    input layer: Tensor("input/Flatten/Reshape:0", shape=(?, 12288), dtype=float32) (?, 12288)
+    encoder: Tensor("encoder/Sigmoid:0", shape=(?, 4096), dtype=float32) (?, 4096)
+    encoder: Tensor("encoder/Sigmoid_1:0", shape=(?, 1024), dtype=float32) (?, 1024)
+    decoder: Tensor("decoder/Sigmoid:0", shape=(?, 4096), dtype=float32) (?, 4096)
+    final layer: Tensor("decoder/Sigmoid_1:0", shape=(?, 12288), dtype=float32) (?, 12288)
+    reshape: [-1, 64, 64, 3]
+    Variable name: encoder/Variable:0, size: 50331648, shape: (12288, 4096)
+    Variable name: encoder/Variable_1:0, size: 4096, shape: (4096,)
+    Variable name: encoder/Variable_2:0, size: 4194304, shape: (4096, 1024)
+    Variable name: encoder/Variable_3:0, size: 1024, shape: (1024,)
+    Variable name: decoder/Variable:0, size: 4194304, shape: (1024, 4096)
+    Variable name: decoder/Variable_1:0, size: 4096, shape: (4096,)
+    Variable name: decoder/Variable_2:0, size: 50331648, shape: (4096, 12288)
+    Variable name: decoder/Variable_3:0, size: 12288, shape: (12288,)
+    Total params: 109073408
+    Epoch 1: Train loss (0.54227), elapsed time 46.363669633865356
+    Epoch 1: Validation loss (0.52479), elapsed time 2.1653923988342285
+    Generating examples to disk...
+    pred: (64, 64, 3) input_img: (64, 64, 3)
+    pred: (64, 64, 3) input_img: (64, 64, 3)
+    pred: (64, 64, 3) input_img: (64, 64, 3)
+    pred: (64, 64, 3) input_img: (64, 64, 3)
+    pred: (64, 64, 3) input_img: (64, 64, 3)
+    pred: (64, 64, 3) input_img: (64, 64, 3)
+    pred: (64, 64, 3) input_img: (64, 64, 3)
+    pred: (64, 64, 3) input_img: (64, 64, 3)
+    pred: (64, 64, 3) input_img: (64, 64, 3)
+    pred: (64, 64, 3) input_img: (64, 64, 3)
+    Writing snapshot to disk...
+    Total elapsed epoch time: 52.66203951835632
+    Epoch 2: Train loss (0.52134), elapsed time 46.482224225997925
+    Epoch 2: Validation loss (0.51896), elapsed time 2.39271879196167
+    Generating examples to disk...
+    row: (64, 640, 3) montage: (128, 640, 3)
+    Writing snapshot to disk...
+    Total elapsed epoch time: 52.20951294898987
+    Epoch 3: Train loss (0.51591), elapsed time 47.74708366394043
+    Epoch 3: Validation loss (0.51369), elapsed time 2.468513250350952
+    Generating examples to disk...
+    row: (64, 640, 3) montage: (192, 640, 3)
+    Writing snapshot to disk...
+    Total elapsed epoch time: 53.761393308639526
+    Epoch 4: Train loss (0.51120), elapsed time 47.460397481918335
+    Epoch 4: Validation loss (0.50981), elapsed time 2.253805160522461
+    Generating examples to disk...
+    row: (64, 640, 3) montage: (256, 640, 3)
+    Writing snapshot to disk...
+    Total elapsed epoch time: 52.87039756774902
+    Epoch 5: Train loss (0.50848), elapsed time 48.249611377716064
+    Epoch 5: Validation loss (0.50729), elapsed time 2.50895094871521
+    Generating examples to disk...
+    row: (64, 640, 3) montage: (320, 640, 3)
+    Writing snapshot to disk...
+    Total elapsed epoch time: 54.5687153339386
+    Epoch 6: Train loss (0.50562), elapsed time 48.76314830780029
+    Epoch 6: Validation loss (0.50436), elapsed time 2.5801913738250732
+    Generating examples to disk...
+    row: (64, 640, 3) montage: (384, 640, 3)
+    Writing snapshot to disk...
+    Total elapsed epoch time: 54.21992874145508
+    Epoch 7: Train loss (0.50354), elapsed time 49.19822359085083
+    Epoch 7: Validation loss (0.50300), elapsed time 2.595099925994873
+    Generating examples to disk...
+    row: (64, 640, 3) montage: (448, 640, 3)
+    Writing snapshot to disk...
+    Total elapsed epoch time: 55.22660827636719
+    Epoch 8: Train loss (0.50221), elapsed time 49.18698215484619
+    Epoch 8: Validation loss (0.50170), elapsed time 2.5633504390716553
+    Generating examples to disk...
+    row: (64, 640, 3) montage: (512, 640, 3)
+    Writing snapshot to disk...
+    Total elapsed epoch time: 54.96487855911255
+    Epoch 9: Train loss (0.50132), elapsed time 49.28360319137573
+    Epoch 9: Validation loss (0.50128), elapsed time 2.5213632583618164
+    Generating examples to disk...
+    row: (64, 640, 3) montage: (576, 640, 3)
+    Writing snapshot to disk...
+    Total elapsed epoch time: 55.76718997955322
+    Epoch 10: Train loss (0.50085), elapsed time 49.20004916191101
+    Epoch 10: Validation loss (0.50051), elapsed time 2.625432252883911
+    Generating examples to disk...
+    row: (64, 640, 3) montage: (640, 640, 3)
+    Writing snapshot to disk...
+    Total elapsed epoch time: 55.39366340637207
+    Epoch 11: Train loss (0.50009), elapsed time 49.37508463859558
+    Epoch 11: Validation loss (0.49982), elapsed time 2.6036384105682373
+    Generating examples to disk...
+    row: (64, 640, 3) montage: (704, 640, 3)
+    Writing snapshot to disk...
+    Total elapsed epoch time: 55.74042272567749
+    Epoch 12: Train loss (0.49932), elapsed time 52.02135515213013
+    Epoch 12: Validation loss (0.49912), elapsed time 2.642273426055908
+    Generating examples to disk...
+    row: (64, 640, 3) montage: (768, 640, 3)
+    Writing snapshot to disk...
+    Total elapsed epoch time: 57.53589606285095
+    Epoch 13: Train loss (0.49848), elapsed time 49.02186632156372
+    Epoch 13: Validation loss (0.49811), elapsed time 2.6154983043670654
+    Generating examples to disk...
+    row: (64, 640, 3) montage: (832, 640, 3)
+    Writing snapshot to disk...
+    Total elapsed epoch time: 54.813963413238525
+    Epoch 14: Train loss (0.49731), elapsed time 49.3905303478241
+    Epoch 14: Validation loss (0.49675), elapsed time 2.6608364582061768
+    Generating examples to disk...
+    row: (64, 640, 3) montage: (896, 640, 3)
+    Writing snapshot to disk...
+    Total elapsed epoch time: 55.173038482666016
+    Epoch 15: Train loss (0.49635), elapsed time 49.379900217056274
+    Epoch 15: Validation loss (0.49620), elapsed time 2.5912506580352783
+    Generating examples to disk...
+    row: (64, 640, 3) montage: (960, 640, 3)
+    Writing snapshot to disk...
+    Total elapsed epoch time: 54.98494577407837
+    Epoch 16: Train loss (0.49584), elapsed time 49.238945960998535
+    Epoch 16: Validation loss (0.49580), elapsed time 2.5477519035339355
+    Generating examples to disk...
+    row: (64, 640, 3) montage: (1024, 640, 3)
+    Writing snapshot to disk...
+    Total elapsed epoch time: 54.77226114273071
+    Epoch 17: Train loss (0.49543), elapsed time 49.395899057388306
+    Epoch 17: Validation loss (0.49506), elapsed time 2.6250011920928955
+    Generating examples to disk...
+    row: (64, 640, 3) montage: (1088, 640, 3)
+    Writing snapshot to disk...
+    Total elapsed epoch time: 55.56075477600098
+    Epoch 18: Train loss (0.49477), elapsed time 48.820311069488525
+    Epoch 18: Validation loss (0.49466), elapsed time 2.6491453647613525
+    Generating examples to disk...
+    row: (64, 640, 3) montage: (1152, 640, 3)
+    Writing snapshot to disk...
+    Total elapsed epoch time: 54.43681716918945
+    Epoch 19: Train loss (0.49440), elapsed time 49.27406859397888
+    Epoch 19: Validation loss (0.49424), elapsed time 2.573746681213379
+    Generating examples to disk...
+    row: (64, 640, 3) montage: (1216, 640, 3)
+    Writing snapshot to disk...
+    Total elapsed epoch time: 54.711318254470825
+    Epoch 20: Train loss (0.49404), elapsed time 49.41479158401489
+    Epoch 20: Validation loss (0.49409), elapsed time 2.5749099254608154
+    Generating examples to disk...
+    row: (64, 640, 3) montage: (1280, 640, 3)
+    Writing snapshot to disk...
+    Total elapsed epoch time: 55.13474988937378
+    Epoch 21: Train loss (0.49362), elapsed time 49.3389413356781
+    Epoch 21: Validation loss (0.49344), elapsed time 2.5552263259887695
+    Generating examples to disk...
+    row: (64, 640, 3) montage: (1344, 640, 3)
+    Writing snapshot to disk...
+    Total elapsed epoch time: 56.695157527923584
+    Epoch 22: Train loss (0.49316), elapsed time 49.239279985427856
+    Epoch 22: Validation loss (0.49319), elapsed time 2.6041669845581055
+    Generating examples to disk...
+    row: (64, 640, 3) montage: (1408, 640, 3)
+    Writing snapshot to disk...
+    Total elapsed epoch time: 55.34358525276184
+    Epoch 23: Train loss (0.49292), elapsed time 49.33585977554321
+    Epoch 23: Validation loss (0.49296), elapsed time 2.6236536502838135
+    Generating examples to disk...
+    row: (64, 640, 3) montage: (1472, 640, 3)
+    Writing snapshot to disk...
+    Total elapsed epoch time: 55.43238711357117
+    Epoch 24: Train loss (0.49273), elapsed time 49.02679181098938
+    Epoch 24: Validation loss (0.49285), elapsed time 2.6338376998901367
+    Generating examples to disk...
+    row: (64, 640, 3) montage: (1536, 640, 3)
+    Writing snapshot to disk...
+    Total elapsed epoch time: 56.05881881713867
+    Epoch 25: Train loss (0.49249), elapsed time 49.32339549064636
+    Epoch 25: Validation loss (0.49260), elapsed time 2.5928618907928467
+    Generating examples to disk...
+    row: (64, 640, 3) montage: (1600, 640, 3)
+    Writing snapshot to disk...
+    Total elapsed epoch time: 55.34242606163025
+    Epoch 26: Train loss (0.49232), elapsed time 48.620933532714844
+    Epoch 26: Validation loss (0.49238), elapsed time 2.645782232284546
+    Generating examples to disk...
+    row: (64, 640, 3) montage: (1664, 640, 3)
+    Writing snapshot to disk...
+    Total elapsed epoch time: 54.958569288253784
+    Epoch 27: Train loss (0.49223), elapsed time 49.190773725509644
+    Epoch 27: Validation loss (0.49230), elapsed time 2.5427072048187256
+    Generating examples to disk...
+    row: (64, 640, 3) montage: (1728, 640, 3)
+    Writing snapshot to disk...
+    Total elapsed epoch time: 54.75286650657654
+    Epoch 28: Train loss (0.49217), elapsed time 49.267242193222046
+    Epoch 28: Validation loss (0.49246), elapsed time 2.5989561080932617
+    Generating examples to disk...
+    row: (64, 640, 3) montage: (1792, 640, 3)
+    Writing snapshot to disk...
+    Total elapsed epoch time: 54.6218478679657
+    Epoch 29: Train loss (0.49210), elapsed time 48.25152516365051
+    Epoch 29: Validation loss (0.49222), elapsed time 2.4788899421691895
+    Generating examples to disk...
+    row: (64, 640, 3) montage: (1856, 640, 3)
+    Writing snapshot to disk...
+    Total elapsed epoch time: 53.67698264122009
+    Epoch 30: Train loss (0.49193), elapsed time 49.330204486846924
+    Epoch 30: Validation loss (0.49190), elapsed time 2.5869691371917725
+    Generating examples to disk...
+    row: (64, 640, 3) montage: (1920, 640, 3)
+    Writing snapshot to disk...
+    Total elapsed epoch time: 54.993654012680054
+    Epoch 31: Train loss (0.49160), elapsed time 49.45775389671326
+    Epoch 31: Validation loss (0.49150), elapsed time 2.6465649604797363
+    Generating examples to disk...
+    row: (64, 640, 3) montage: (1984, 640, 3)
+    Writing snapshot to disk...
+    Total elapsed epoch time: 55.15675902366638
+    Epoch 32: Train loss (0.49134), elapsed time 49.08610773086548
+    Epoch 32: Validation loss (0.49133), elapsed time 2.5715627670288086
+    Generating examples to disk...
+    row: (64, 640, 3) montage: (2048, 640, 3)
+    Writing snapshot to disk...
+    Total elapsed epoch time: 54.81978893280029
+    Epoch 33: Train loss (0.49112), elapsed time 49.441802978515625
+    Epoch 33: Validation loss (0.49118), elapsed time 2.563274383544922
+    Generating examples to disk...
+    row: (64, 640, 3) montage: (2112, 640, 3)
+    Writing snapshot to disk...
+    Total elapsed epoch time: 55.01024389266968
+    Epoch 34: Train loss (0.49099), elapsed time 49.27054715156555
+    Epoch 34: Validation loss (0.49103), elapsed time 2.562239170074463
+    Generating examples to disk...
+    row: (64, 640, 3) montage: (2176, 640, 3)
+    Writing snapshot to disk...
+    Total elapsed epoch time: 54.85596966743469
+    Epoch 35: Train loss (0.49083), elapsed time 49.081260681152344
+    Epoch 35: Validation loss (0.49084), elapsed time 2.528639793395996
+    Generating examples to disk...
+    row: (64, 640, 3) montage: (2240, 640, 3)
+    Writing snapshot to disk...
+    Total elapsed epoch time: 55.30333089828491
+    Epoch 36: Train loss (0.49055), elapsed time 49.27988815307617
+    Epoch 36: Validation loss (0.49027), elapsed time 2.6326520442962646
+    Generating examples to disk...
+    row: (64, 640, 3) montage: (2304, 640, 3)
+    Writing snapshot to disk...
+    Total elapsed epoch time: 54.920488357543945
+    Epoch 37: Train loss (0.49001), elapsed time 48.517935276031494
+    Epoch 37: Validation loss (0.49012), elapsed time 2.4773776531219482
+    Generating examples to disk...
+    row: (64, 640, 3) montage: (2368, 640, 3)
+    Writing snapshot to disk...
+    Total elapsed epoch time: 53.79883098602295
+    Epoch 38: Train loss (0.48993), elapsed time 49.25420117378235
+    Epoch 38: Validation loss (0.49011), elapsed time 2.6034998893737793
+    Generating examples to disk...
+    row: (64, 640, 3) montage: (2432, 640, 3)
+    Writing snapshot to disk...
+    Total elapsed epoch time: 54.87961554527283
+    Epoch 39: Train loss (0.48985), elapsed time 49.26361560821533
+    Epoch 39: Validation loss (0.48993), elapsed time 2.5921471118927
+    Generating examples to disk...
+    row: (64, 640, 3) montage: (2496, 640, 3)
+    Writing snapshot to disk...
+    Total elapsed epoch time: 55.08442711830139
+    Epoch 40: Train loss (0.48978), elapsed time 49.45745825767517
+    Epoch 40: Validation loss (0.48964), elapsed time 2.6466214656829834
+    Generating examples to disk...
+    row: (64, 640, 3) montage: (2560, 640, 3)
+    Writing snapshot to disk...
+    Total elapsed epoch time: 55.80877494812012
+    Test loss: 0.48949
+#+end_example
+
+*** RMSProp
+    50.810
+    Learning rate = 0.1
+    Decay = 0.8
+    Momentum = 0.05
+    Centered = True
+    #+begin_src sh :results output
+    python main.py --dataset floorplan --layers 4096 1024 --dir workspace/tests/rmsprop5 --epochs 40 --model fc --loss rmse --optimizer RMSProp --lr 0.1 --centered --decay 0.8 --momentum 0.1
+    #+end_src
+
+    #+RESULTS:
+    #+begin_example
+    Loading dataset...
+    SAMPLE IMAGE (64, 64, 3)
+    input layer: Tensor("input/Flatten/Reshape:0", shape=(?, 12288), dtype=float32) (?, 12288)
+    encoder: Tensor("encoder/Sigmoid:0", shape=(?, 4096), dtype=float32) (?, 4096)
+    encoder: Tensor("encoder/Sigmoid_1:0", shape=(?, 1024), dtype=float32) (?, 1024)
+    decoder: Tensor("decoder/Sigmoid:0", shape=(?, 4096), dtype=float32) (?, 4096)
+    final layer: Tensor("decoder/Sigmoid_1:0", shape=(?, 12288), dtype=float32) (?, 12288)
+    reshape: [-1, 64, 64, 3]
+    Variable name: encoder/Variable:0, size: 50331648, shape: (12288, 4096)
+    Variable name: encoder/Variable_1:0, size: 4096, shape: (4096,)
+    Variable name: encoder/Variable_2:0, size: 4194304, shape: (4096, 1024)
+    Variable name: encoder/Variable_3:0, size: 1024, shape: (1024,)
+    Variable name: decoder/Variable:0, size: 4194304, shape: (1024, 4096)
+    Variable name: decoder/Variable_1:0, size: 4096, shape: (4096,)
+    Variable name: decoder/Variable_2:0, size: 50331648, shape: (4096, 12288)
+    Variable name: decoder/Variable_3:0, size: 12288, shape: (12288,)
+    Total params: 109073408
+    Epoch 1: Train loss (0.54283), elapsed time 46.350165367126465
+    Epoch 1: Validation loss (0.52000), elapsed time 2.191005229949951
+    Generating examples to disk...
+    pred: (64, 64, 3) input_img: (64, 64, 3)
+    pred: (64, 64, 3) input_img: (64, 64, 3)
+    pred: (64, 64, 3) input_img: (64, 64, 3)
+    pred: (64, 64, 3) input_img: (64, 64, 3)
+    pred: (64, 64, 3) input_img: (64, 64, 3)
+    pred: (64, 64, 3) input_img: (64, 64, 3)
+    pred: (64, 64, 3) input_img: (64, 64, 3)
+    pred: (64, 64, 3) input_img: (64, 64, 3)
+    pred: (64, 64, 3) input_img: (64, 64, 3)
+    pred: (64, 64, 3) input_img: (64, 64, 3)
+    Writing snapshot to disk...
+    Total elapsed epoch time: 51.51072430610657
+    Epoch 2: Train loss (0.51668), elapsed time 46.263328075408936
+    Epoch 2: Validation loss (0.51455), elapsed time 2.1805167198181152
+    Generating examples to disk...
+    row: (64, 640, 3) montage: (128, 640, 3)
+    Writing snapshot to disk...
+    Total elapsed epoch time: 51.607778549194336
+    Epoch 3: Train loss (0.51225), elapsed time 46.18698072433472
+    Epoch 3: Validation loss (0.50951), elapsed time 2.17694091796875
+    Generating examples to disk...
+    row: (64, 640, 3) montage: (192, 640, 3)
+    Writing snapshot to disk...
+    Total elapsed epoch time: 51.60159206390381
+    Epoch 4: Train loss (0.50795), elapsed time 46.251758098602295
+    Epoch 4: Validation loss (0.50683), elapsed time 2.1981828212738037
+    Generating examples to disk...
+    row: (64, 640, 3) montage: (256, 640, 3)
+    Writing snapshot to disk...
+    Total elapsed epoch time: 52.13196039199829
+    Epoch 5: Train loss (0.50571), elapsed time 46.20774555206299
+    Epoch 5: Validation loss (0.50480), elapsed time 2.183351755142212
+    Generating examples to disk...
+    row: (64, 640, 3) montage: (320, 640, 3)
+    Writing snapshot to disk...
+    Total elapsed epoch time: 51.51686644554138
+    Epoch 6: Train loss (0.50378), elapsed time 46.01487708091736
+    Epoch 6: Validation loss (0.50304), elapsed time 2.1974658966064453
+    Generating examples to disk...
+    row: (64, 640, 3) montage: (384, 640, 3)
+    Writing snapshot to disk...
+    Total elapsed epoch time: 51.47537970542908
+    Epoch 7: Train loss (0.50230), elapsed time 46.13916826248169
+    Epoch 7: Validation loss (0.50177), elapsed time 2.17130708694458
+    Generating examples to disk...
+    row: (64, 640, 3) montage: (448, 640, 3)
+    Writing snapshot to disk...
+    Total elapsed epoch time: 51.51300883293152
+    Epoch 8: Train loss (0.50127), elapsed time 46.18226861953735
+    Epoch 8: Validation loss (0.50072), elapsed time 2.1913087368011475
+    Generating examples to disk...
+    row: (64, 640, 3) montage: (512, 640, 3)
+    Writing snapshot to disk...
+    Total elapsed epoch time: 51.35486674308777
+    Epoch 9: Train loss (0.49996), elapsed time 46.13020992279053
+    Epoch 9: Validation loss (0.49951), elapsed time 2.175748109817505
+    Generating examples to disk...
+    row: (64, 640, 3) montage: (576, 640, 3)
+    Writing snapshot to disk...
+    Total elapsed epoch time: 51.25672626495361
+    Epoch 10: Train loss (0.49865), elapsed time 46.158886671066284
+    Epoch 10: Validation loss (0.49837), elapsed time 2.1955137252807617
+    Generating examples to disk...
+    row: (64, 640, 3) montage: (640, 640, 3)
+    Writing snapshot to disk...
+    Total elapsed epoch time: 51.65986251831055
+    Epoch 11: Train loss (0.49796), elapsed time 46.12053036689758
+    Epoch 11: Validation loss (0.49777), elapsed time 2.1631100177764893
+    Generating examples to disk...
+    row: (64, 640, 3) montage: (704, 640, 3)
+    Writing snapshot to disk...
+    Total elapsed epoch time: 51.897196769714355
+    Epoch 12: Train loss (0.49714), elapsed time 47.90792155265808
+    Epoch 12: Validation loss (0.49703), elapsed time 2.356598377227783
+    Generating examples to disk...
+    row: (64, 640, 3) montage: (768, 640, 3)
+    Writing snapshot to disk...
+    Total elapsed epoch time: 54.428725719451904
+    Epoch 13: Train loss (0.49650), elapsed time 47.94906234741211
+    Epoch 13: Validation loss (0.49630), elapsed time 2.3704917430877686
+    Generating examples to disk...
+    row: (64, 640, 3) montage: (832, 640, 3)
+    Writing snapshot to disk...
+    Total elapsed epoch time: 53.99078559875488
+    Epoch 14: Train loss (0.49586), elapsed time 47.852476835250854
+    Epoch 14: Validation loss (0.49571), elapsed time 2.346252202987671
+    Generating examples to disk...
+    row: (64, 640, 3) montage: (896, 640, 3)
+    Writing snapshot to disk...
+    Total elapsed epoch time: 53.3172550201416
+    Epoch 15: Train loss (0.49523), elapsed time 47.78503966331482
+    Epoch 15: Validation loss (0.49519), elapsed time 2.397634267807007
+    Generating examples to disk...
+    row: (64, 640, 3) montage: (960, 640, 3)
+    Writing snapshot to disk...
+    Total elapsed epoch time: 54.066614627838135
+    Epoch 16: Train loss (0.49467), elapsed time 47.57620668411255
+    Epoch 16: Validation loss (0.49453), elapsed time 2.3488919734954834
+    Generating examples to disk...
+    row: (64, 640, 3) montage: (1024, 640, 3)
+    Writing snapshot to disk...
+    Total elapsed epoch time: 53.028493881225586
+    Epoch 17: Train loss (0.49415), elapsed time 47.33431529998779
+    Epoch 17: Validation loss (0.49393), elapsed time 2.3711040019989014
+    Generating examples to disk...
+    row: (64, 640, 3) montage: (1088, 640, 3)
+    Writing snapshot to disk...
+    Total elapsed epoch time: 52.92811059951782
+    Epoch 18: Train loss (0.49345), elapsed time 47.90533185005188
+    Epoch 18: Validation loss (0.49325), elapsed time 2.402296543121338
+    Generating examples to disk...
+    row: (64, 640, 3) montage: (1152, 640, 3)
+    Writing snapshot to disk...
+    Total elapsed epoch time: 53.36457419395447
+    Epoch 19: Train loss (0.49285), elapsed time 47.88088512420654
+    Epoch 19: Validation loss (0.49270), elapsed time 2.4085495471954346
+    Generating examples to disk...
+    row: (64, 640, 3) montage: (1216, 640, 3)
+    Writing snapshot to disk...
+    Total elapsed epoch time: 53.27132058143616
+    Epoch 20: Train loss (0.49241), elapsed time 47.66422510147095
+    Epoch 20: Validation loss (0.49236), elapsed time 2.3828928470611572
+    Generating examples to disk...
+    row: (64, 640, 3) montage: (1280, 640, 3)
+    Writing snapshot to disk...
+    Total elapsed epoch time: 53.07936334609985
+    Epoch 21: Train loss (0.49193), elapsed time 47.61594343185425
+    Epoch 21: Validation loss (0.49187), elapsed time 2.4141902923583984
+    Generating examples to disk...
+    row: (64, 640, 3) montage: (1344, 640, 3)
+    Writing snapshot to disk...
+    Total elapsed epoch time: 53.48058319091797
+    Epoch 22: Train loss (0.49140), elapsed time 47.52801728248596
+    Epoch 22: Validation loss (0.49141), elapsed time 2.3180015087127686
+    Generating examples to disk...
+    row: (64, 640, 3) montage: (1408, 640, 3)
+    Writing snapshot to disk...
+    Total elapsed epoch time: 52.686917304992676
+    Epoch 23: Train loss (0.49120), elapsed time 47.85945248603821
+    Epoch 23: Validation loss (0.49119), elapsed time 2.389477252960205
+    Generating examples to disk...
+    row: (64, 640, 3) montage: (1472, 640, 3)
+    Writing snapshot to disk...
+    Total elapsed epoch time: 53.78776407241821
+    Epoch 24: Train loss (0.49087), elapsed time 47.83444118499756
+    Epoch 24: Validation loss (0.49097), elapsed time 2.342148780822754
+    Generating examples to disk...
+    row: (64, 640, 3) montage: (1536, 640, 3)
+    Writing snapshot to disk...
+    Total elapsed epoch time: 53.23054528236389
+    Epoch 25: Train loss (0.49078), elapsed time 47.58247256278992
+    Epoch 25: Validation loss (0.49080), elapsed time 2.4339983463287354
+    Generating examples to disk...
+    row: (64, 640, 3) montage: (1600, 640, 3)
+    Writing snapshot to disk...
+    Total elapsed epoch time: 52.83971929550171
+    Epoch 26: Train loss (0.49041), elapsed time 47.84057807922363
+    Epoch 26: Validation loss (0.49021), elapsed time 2.3985631465911865
+    Generating examples to disk...
+    row: (64, 640, 3) montage: (1664, 640, 3)
+    Writing snapshot to disk...
+    Total elapsed epoch time: 53.77077341079712
+    Epoch 27: Train loss (0.49006), elapsed time 47.838661909103394
+    Epoch 27: Validation loss (0.48977), elapsed time 2.3447086811065674
+    Generating examples to disk...
+    row: (64, 640, 3) montage: (1728, 640, 3)
+    Writing snapshot to disk...
+    Total elapsed epoch time: 53.16430997848511
+    Epoch 28: Train loss (0.48959), elapsed time 47.83988308906555
+    Epoch 28: Validation loss (0.48963), elapsed time 2.372159957885742
+    Generating examples to disk...
+    row: (64, 640, 3) montage: (1792, 640, 3)
+    Writing snapshot to disk...
+    Total elapsed epoch time: 53.331210136413574
+    Epoch 29: Train loss (0.48946), elapsed time 47.80358409881592
+    Epoch 29: Validation loss (0.48957), elapsed time 2.373387336730957
+    Generating examples to disk...
+    row: (64, 640, 3) montage: (1856, 640, 3)
+    Writing snapshot to disk...
+    Total elapsed epoch time: 52.872901916503906
+    Epoch 30: Train loss (0.48909), elapsed time 48.968488931655884
+    Epoch 30: Validation loss (0.48910), elapsed time 2.5950517654418945
+    Generating examples to disk...
+    row: (64, 640, 3) montage: (1920, 640, 3)
+    Writing snapshot to disk...
+    Total elapsed epoch time: 54.7508327960968
+    Epoch 31: Train loss (0.48880), elapsed time 49.29634475708008
+    Epoch 31: Validation loss (0.48889), elapsed time 2.5909507274627686
+    Generating examples to disk...
+    row: (64, 640, 3) montage: (1984, 640, 3)
+    Writing snapshot to disk...
+    Total elapsed epoch time: 55.306453704833984
+    Epoch 32: Train loss (0.48855), elapsed time 48.6327018737793
+    Epoch 32: Validation loss (0.48853), elapsed time 2.5904860496520996
+    Generating examples to disk...
+    row: (64, 640, 3) montage: (2048, 640, 3)
+    Writing snapshot to disk...
+    Total elapsed epoch time: 54.309855699539185
+    Epoch 33: Train loss (0.48808), elapsed time 48.95825552940369
+    Epoch 33: Validation loss (0.48825), elapsed time 2.558591365814209
+    Generating examples to disk...
+    row: (64, 640, 3) montage: (2112, 640, 3)
+    Writing snapshot to disk...
+    Total elapsed epoch time: 59.10085368156433
+    Epoch 34: Train loss (0.48807), elapsed time 48.919403314590454
+    Epoch 34: Validation loss (0.48816), elapsed time 2.532982587814331
+    Generating examples to disk...
+    row: (64, 640, 3) montage: (2176, 640, 3)
+    Writing snapshot to disk...
+    Total elapsed epoch time: 54.74251103401184
+    Epoch 35: Train loss (0.48785), elapsed time 49.286577463150024
+    Epoch 35: Validation loss (0.48775), elapsed time 2.560901165008545
+    Generating examples to disk...
+    row: (64, 640, 3) montage: (2240, 640, 3)
+    Writing snapshot to disk...
+    Total elapsed epoch time: 54.84214544296265
+    Epoch 36: Train loss (0.48739), elapsed time 49.46509337425232
+    Epoch 36: Validation loss (0.48740), elapsed time 2.6250808238983154
+    Generating examples to disk...
+    row: (64, 640, 3) montage: (2304, 640, 3)
+    Writing snapshot to disk...
+    Total elapsed epoch time: 55.20727729797363
+    Epoch 37: Train loss (0.48695), elapsed time 49.23584794998169
+    Epoch 37: Validation loss (0.48688), elapsed time 2.5344393253326416
+    Generating examples to disk...
+    row: (64, 640, 3) montage: (2368, 640, 3)
+    Writing snapshot to disk...
+    Total elapsed epoch time: 54.82835507392883
+    Epoch 38: Train loss (0.48640), elapsed time 49.29257297515869
+    Epoch 38: Validation loss (0.48619), elapsed time 2.649508476257324
+    Generating examples to disk...
+    row: (64, 640, 3) montage: (2432, 640, 3)
+    Writing snapshot to disk...
+    Total elapsed epoch time: 54.95316290855408
+    Epoch 39: Train loss (0.48586), elapsed time 49.35586929321289
+    Epoch 39: Validation loss (0.48598), elapsed time 2.627000093460083
+    Generating examples to disk...
+    row: (64, 640, 3) montage: (2496, 640, 3)
+    Writing snapshot to disk...
+    Total elapsed epoch time: 54.88578200340271
+    Epoch 40: Train loss (0.48558), elapsed time 49.46382164955139
+    Epoch 40: Validation loss (0.48568), elapsed time 2.5408926010131836
+    Generating examples to disk...
+    row: (64, 640, 3) montage: (2560, 640, 3)
+    Writing snapshot to disk...
+    Total elapsed epoch time: 55.35764765739441
+    Test loss: 0.48551
+#+end_example
+
+
 * Simple FC
 ** 64
    #+begin_src sh :results output
@@ -2032,10 +2990,164 @@
 
 ** 256 > 64 
    #+begin_src sh :results output
-   python main.py --dataset floorplan --layers 256 64 --dir workspace/fc_256_64_rmse2 --epochs 20 --model fc --loss rmse --optimizer RMSProp --grayscale
+python main.py --dataset floorplan --layers 4096 1024 --dir workspace/TEST --epochs 20 --model fc --loss rmse --optimizer RMSProp
    #+end_src
 
    #+RESULTS:
+   #+begin_example
+   Loading dataset...
+   Extracting data/MNIST_data/train-images-idx3-ubyte.gz
+   Extracting data/MNIST_data/train-labels-idx1-ubyte.gz
+   Extracting data/MNIST_data/t10k-images-idx3-ubyte.gz
+   Extracting data/MNIST_data/t10k-labels-idx1-ubyte.gz
+   SAMPLE IMAGE (784,)
+   input layer: Tensor("input/Flatten/Reshape:0", shape=(?, 784), dtype=float32) (?, 784)
+   encoder: Tensor("encoder/Sigmoid:0", shape=(?, 256), dtype=float32) (?, 256)
+   encoder: Tensor("encoder/Sigmoid_1:0", shape=(?, 64), dtype=float32) (?, 64)
+   decoder: Tensor("decoder/Sigmoid:0", shape=(?, 256), dtype=float32) (?, 256)
+   final layer: Tensor("decoder/Sigmoid_1:0", shape=(?, 784), dtype=float32) (?, 784)
+   reshape: [-1, 28, 28, 1]
+   Variable name: encoder/Variable:0, size: 200704, shape: (784, 256)
+   Variable name: encoder/Variable_1:0, size: 256, shape: (256,)
+   Variable name: encoder/Variable_2:0, size: 16384, shape: (256, 64)
+   Variable name: encoder/Variable_3:0, size: 64, shape: (64,)
+   Variable name: decoder/Variable:0, size: 16384, shape: (64, 256)
+   Variable name: decoder/Variable_1:0, size: 256, shape: (256,)
+   Variable name: decoder/Variable_2:0, size: 200704, shape: (256, 784)
+   Variable name: decoder/Variable_3:0, size: 784, shape: (784,)
+   Total params: 435536
+   Epoch 1: Train loss (0.61210), elapsed time 0.6355626583099365
+   Epoch 1: Validation loss (0.47075), elapsed time 0.029822111129760742
+   Generating examples to disk...
+   pred: (28, 28, 1) input_img: (28, 28, 1)
+   pred: (28, 28, 1) input_img: (28, 28, 1)
+   pred: (28, 28, 1) input_img: (28, 28, 1)
+   pred: (28, 28, 1) input_img: (28, 28, 1)
+   pred: (28, 28, 1) input_img: (28, 28, 1)
+   pred: (28, 28, 1) input_img: (28, 28, 1)
+   pred: (28, 28, 1) input_img: (28, 28, 1)
+   pred: (28, 28, 1) input_img: (28, 28, 1)
+   pred: (28, 28, 1) input_img: (28, 28, 1)
+   pred: (28, 28, 1) input_img: (28, 28, 1)
+   Writing snapshot to disk...
+   Total elapsed epoch time: 0.9689223766326904
+   Epoch 2: Train loss (0.43714), elapsed time 0.5346856117248535
+   Epoch 2: Validation loss (0.41658), elapsed time 0.032251834869384766
+   Generating examples to disk...
+   row: (28, 280, 1) montage: (56, 280, 1)
+   Writing snapshot to disk...
+   Total elapsed epoch time: 0.879889726638794
+   Epoch 3: Train loss (0.40530), elapsed time 0.5295934677124023
+   Epoch 3: Validation loss (0.39723), elapsed time 0.03036952018737793
+   Generating examples to disk...
+   row: (28, 280, 1) montage: (84, 280, 1)
+   Writing snapshot to disk...
+   Total elapsed epoch time: 0.7886857986450195
+   Epoch 4: Train loss (0.38722), elapsed time 0.521747350692749
+   Epoch 4: Validation loss (0.37712), elapsed time 0.029436349868774414
+   Generating examples to disk...
+   row: (28, 280, 1) montage: (112, 280, 1)
+   Writing snapshot to disk...
+   Total elapsed epoch time: 0.8381452560424805
+   Epoch 5: Train loss (0.37261), elapsed time 0.5288777351379395
+   Epoch 5: Validation loss (0.36978), elapsed time 0.02768707275390625
+   Generating examples to disk...
+   row: (28, 280, 1) montage: (140, 280, 1)
+   Writing snapshot to disk...
+   Total elapsed epoch time: 0.7806723117828369
+   Epoch 6: Train loss (0.36564), elapsed time 0.5260069370269775
+   Epoch 6: Validation loss (0.36156), elapsed time 0.028254985809326172
+   Generating examples to disk...
+   row: (28, 280, 1) montage: (168, 280, 1)
+   Writing snapshot to disk...
+   Total elapsed epoch time: 0.8457884788513184
+   Epoch 7: Train loss (0.35689), elapsed time 0.5283148288726807
+   Epoch 7: Validation loss (0.35296), elapsed time 0.029798507690429688
+   Generating examples to disk...
+   row: (28, 280, 1) montage: (196, 280, 1)
+   Writing snapshot to disk...
+   Total elapsed epoch time: 0.848719596862793
+   Epoch 8: Train loss (0.35157), elapsed time 0.5308029651641846
+   Epoch 8: Validation loss (0.34908), elapsed time 0.02503180503845215
+   Generating examples to disk...
+   row: (28, 280, 1) montage: (224, 280, 1)
+   Writing snapshot to disk...
+
+   Total elapsed epoch time: 0.7876176834106445
+   Epoch 9: Train loss (0.34556), elapsed time 0.49967384338378906
+   Epoch 9: Validation loss (0.34312), elapsed time 0.028678178787231445
+   Generating examples to disk...
+   row: (28, 280, 1) montage: (252, 280, 1)
+   Writing snapshot to disk...
+   Total elapsed epoch time: 0.8155732154846191
+   Epoch 10: Train loss (0.34167), elapsed time 0.5185468196868896
+   Epoch 10: Validation loss (0.33999), elapsed time 0.0284271240234375
+   Generating examples to disk...
+   row: (28, 280, 1) montage: (280, 280, 1)
+   Writing snapshot to disk...
+   Total elapsed epoch time: 0.775130033493042
+   Epoch 11: Train loss (0.33793), elapsed time 0.5228796005249023
+   Epoch 11: Validation loss (0.33565), elapsed time 0.03069782257080078
+   Generating examples to disk...
+   row: (28, 280, 1) montage: (308, 280, 1)
+   Writing snapshot to disk...
+   Total elapsed epoch time: 0.8329727649688721
+   Epoch 12: Train loss (0.33545), elapsed time 0.5232024192810059
+   Epoch 12: Validation loss (0.33382), elapsed time 0.02652573585510254
+   Generating examples to disk...
+   row: (28, 280, 1) montage: (336, 280, 1)
+   Writing snapshot to disk...
+   Total elapsed epoch time: 0.8406374454498291
+   Epoch 13: Train loss (0.33413), elapsed time 0.5140750408172607
+   Epoch 13: Validation loss (0.33433), elapsed time 0.02922224998474121
+   Generating examples to disk...
+   row: (28, 280, 1) montage: (364, 280, 1)
+   Writing snapshot to disk...
+   Total elapsed epoch time: 0.7685337066650391
+   Epoch 14: Train loss (0.33323), elapsed time 0.5299820899963379
+   Epoch 14: Validation loss (0.33185), elapsed time 0.028367996215820312
+   Generating examples to disk...
+   row: (28, 280, 1) montage: (392, 280, 1)
+   Writing snapshot to disk...
+   Total elapsed epoch time: 0.8508508205413818
+   Epoch 15: Train loss (0.33012), elapsed time 0.5306105613708496
+   Epoch 15: Validation loss (0.32584), elapsed time 0.026514768600463867
+   Generating examples to disk...
+   row: (28, 280, 1) montage: (420, 280, 1)
+   Writing snapshot to disk...
+   Total elapsed epoch time: 0.850121021270752
+   Epoch 16: Train loss (0.32685), elapsed time 0.5270786285400391
+   Epoch 16: Validation loss (0.32707), elapsed time 0.028649330139160156
+   Generating examples to disk...
+   row: (28, 280, 1) montage: (448, 280, 1)
+   Writing snapshot to disk...
+   Total elapsed epoch time: 0.7810993194580078
+   Epoch 17: Train loss (0.32466), elapsed time 0.5109961032867432
+   Epoch 17: Validation loss (0.32220), elapsed time 0.026248693466186523
+   Generating examples to disk...
+   row: (28, 280, 1) montage: (476, 280, 1)
+   Writing snapshot to disk...
+   Total elapsed epoch time: 0.8262331485748291
+   Epoch 18: Train loss (0.32266), elapsed time 0.5204799175262451
+   Epoch 18: Validation loss (0.31854), elapsed time 0.027257442474365234
+   Generating examples to disk...
+   row: (28, 280, 1) montage: (504, 280, 1)
+   Writing snapshot to disk...
+   Total elapsed epoch time: 0.7657933235168457
+   Epoch 19: Train loss (0.31998), elapsed time 0.5131454467773438
+   Epoch 19: Validation loss (0.31894), elapsed time 0.027907609939575195
+   Generating examples to disk...
+   row: (28, 280, 1) montage: (532, 280, 1)
+   Writing snapshot to disk...
+   Total elapsed epoch time: 0.840653657913208
+   Epoch 20: Train loss (0.31936), elapsed time 0.5373444557189941
+   Epoch 20: Validation loss (0.31788), elapsed time 0.026714563369750977
+   Generating examples to disk...
+   row: (28, 280, 1) montage: (560, 280, 1)
+   Writing snapshot to disk...
+   Total elapsed epoch time: 0.8586738109588623
+   Test loss: 0.31716
+#+end_example
 
 
 ** 128 > 64

@@ -16,6 +16,14 @@ class Dataset:
         return (x, None)
         # return (np.reshape(x, (batch_size, 64*64*3)), None)
 
+    @property
+    def images(self):
+        return self.dataset
+
+    @property
+    def labels(self):
+        return None
+
 
 class Floorplans:
     def __init__(self, root_dir='/mnt/research/datasets/floorplans/'):
