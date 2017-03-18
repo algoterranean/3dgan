@@ -51,60 +51,57 @@ def simple_fc(x, layer_sizes):
     return x
 
 
-def _cnn_layer(x, x_size, y_size):
-    K = tf.Variable(tf.truncated_normal([3, 3, x_size, y_size], stddev=0.1))
+
+
+def _downconv_layer(x, num_filters):
+    in_shape = x.get_shape().as_list()
+    K = tf.Variable(tf.truncated_normal([3, 3, in_shape[3], num_filters], stddev=0.1))
+    # b = tf.Variable(tf.truncated_normal(num_filters))
     l = tf.nn.conv2d(x, K, strides=[1, 1, 1, 1], padding='SAME')
-    # l = tf.nn.max_pool(l, [1, 2, 2, 1], [1, 2, 2, 1], padding='SAME')
+    l2 = tf.nn.relu(l)
+    # print('in shape:', in_shape, 'out shape:', l.get_shape())
+    l = tf.nn.max_pool(l2, [1, 2, 2, 1], strides=[1, 2, 2, 1], padding='SAME')
+    # print('in shape:', l2.get_shape(), 'out shape:', l.get_shape())
     return l
 
 
-def simple_cnn(x, layer_sizes):
-    orig_shape = list(x.get_shape())
+def _upconv_layer(x, num_filters):
+    in_shape = x.get_shape().as_list()
+    K = tf.Variable(tf.truncated_normal([3, 3, num_filters, in_shape[3]], stddev=0.1))
+    in_shape = tf.shape(x)
+    out_shape = tf.stack([in_shape[0], in_shape[1]*2, in_shape[2]*2, num_filters])
+    l = tf.nn.conv2d_transpose(x, K, output_shape=out_shape, strides=[1, 2, 2, 1], padding='SAME')
+    l = tf.add(l, tf.Variable(tf.zeros([K.get_shape().as_list()[2]])))
+    l = tf.nn.relu(l)
+    return l
+    
 
+def simple_cnn(x, layer_sizes):
+    # input
+    orig_shape = x.get_shape().as_list()
     print('i)', x.get_shape())
 
     # encoder
     with tf.variable_scope('encoder'):
-        for size in layer_sizes:
-            s = int(list(x.get_shape())[3])
-            K = tf.Variable(tf.truncated_normal([3, 3, s, size], stddev=0.1))
-            x = tf.nn.conv2d(x, K, strides=[1, 1, 1, 1], padding='SAME')
-            x = tf.nn.relu(x)
-            tf.summary.histogram('Encoder {}'.format(size), x)
+        for out_size in layer_sizes:
+            x = _downconv_layer(x, out_size)
+            # attach summary histogram
+            tf.summary.histogram('Encoder {}'.format(out_size), x)
             print('e)', x.get_shape())
-            # x = tf.nn.max_pool(x, [1, 2, 2, 1], strides=[1, 2, 2, 1], padding='SAME')
-            # x = _cnn_layer(x, s, size)
+
 
     # decoder
     with tf.variable_scope('decoder'):
-        for size in layer_sizes[1::-1][1:]:
-            s = int(list(x.get_shape())[3])
-            K = tf.Variable(tf.truncated_normal([3, 3, s, size], stddev=0.1))
-            os = [-1] + list(x.get_shape())[1:]
-            os = [os[0], int(os[1])*2, int(os[2])*2, size]
-
-            x = tf.nn.conv2d(x, K, strides=[1,1,1,1], padding='SAME')
-            # print('GET SHAPE:', os)
-            # x = tf.nn.conv2d_transpose(x, K, output_shape=os, strides=[1, 1, 1, 1], padding='SAME')
-            x = tf.nn.relu(x)
-            tf.summary.histogram('Decoder {}'.format(size),x)
+        for out_size in layer_sizes[1::-1]:
+            x = _upconv_layer(x, out_size)
+            # attach summary histogram
+            tf.summary.histogram('Decoder {}'.format(out_size),x)
             print('d)', x.get_shape())
 
-        s = int(list(x.get_shape())[3])
-        size = int(orig_shape[3])
-        K = tf.Variable(tf.truncated_normal([3, 3, s, size], stddev=0.1))
-
-        os = [-1] + list(x.get_shape())[1:]
-        os = [os[0], int(os[1])*2, int(os[2])*2, int(os[3])]
-        # print('GET SHAPE:', os)
-        # x = tf.nn.conv2d_transpose(x, K, output_shape=os, strides=[1, 1, 1, 1], padding='SAME')
-        x = tf.nn.conv2d(x, K, strides=[1,1,1,1], padding='SAME')
-        x = tf.nn.relu(x)
-        tf.summary.histogram('Output'.format(size), x)
+        # output
+        x = _upconv_layer(x, orig_shape[3])
+        # attach summary histogram
+        tf.summary.histogram('Output', x)
         print('o)', x.get_shape())
-        # x = tf.nn.conv2d(x, K, strides=[1, 1, 1, 1], padding='SAME')
-            
-            
-        # x = _cnn_layer(x, i, i)
         
     return x

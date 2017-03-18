@@ -13,14 +13,14 @@ parser.add_argument('--examples', type=int, default=10)
 parser.add_argument('--lr', type=float, default=0.01)
 parser.add_argument('--layers', type=int, nargs='+', default=(512, 256, 128))
 parser.add_argument('--seed', type=int, default=os.urandom(4))
-parser.add_argument('--dataset', type=str, default='mnist')
+parser.add_argument('--dataset', type=lambda s: s.lower(), default='mnist')
 parser.add_argument('--dir', type=str, default='workspace/{}'.format(uuid.uuid4()))
 parser.add_argument('--resume', default=False, action='store_true')
 parser.add_argument('--interactive', default=False, action='store_true')
-parser.add_argument('--model', type=str, default='fc')
+parser.add_argument('--model', type=lambda s: s.lower(), default='fc')
 parser.add_argument('--grayscale', default=False, action='store_true')
-parser.add_argument('--loss', type=str, default='l1')
-parser.add_argument('--optimizer', type=str, default='RMSProp')
+parser.add_argument('--loss', type=lambda s: s.lower(), default='l1')
+parser.add_argument('--optimizer', type=lambda s: s.lower(), default='rmsprop')
 parser.add_argument('--momentum', type=float, default=0.01)
 parser.add_argument('--fresh', default=False, action='store_true')
 parser.add_argument('--decay', type=float, default=0.9)
@@ -34,9 +34,6 @@ random.seed(args.seed)
 
 sess = tf.Session()
 
-# dataset
-# TODO: load this last? need the dataset size info though for model creation
-data = get_dataset(args.dataset)
 
 # print('SAMPLE IMAGE', data.train.images[0].shape)
 # sample_image = data.train.dataset[:1]
@@ -58,7 +55,12 @@ if args.model == 'fc':
 elif args.model == 'cnn':
     y_hat = simple_cnn(x, args.layers)
 
+print('data input shape:', x_input.get_shape())
+print('model input shape:', x.get_shape())
+print('model output shape:', y_hat.get_shape())
 
+
+# with tf.variable_scope('loss_functions'):
     
 # loss
 if args.loss == 'l1':
@@ -71,29 +73,30 @@ elif args.loss == 'ssim':
     loss = 1.0 - tf_ssim(tf.image.rgb_to_grayscale(x), tf.image.rgb_to_grayscale(y_hat))
 elif args.loss == 'crossentropy':
     loss = -tf.reduce_sum(x * tf.log(y_hat))
-    
 
 # optimizer
-if args.optimizer == 'RMSProp':
+if args.optimizer == 'rmsprop':
     optimizer = tf.train.RMSPropOptimizer(args.lr, args.decay, args.momentum, centered=args.centered)
-elif args.optimizer == 'Adadelta':
+elif args.optimizer == 'adadelta':
     optimizer = tf.train.AdadeltaOptimizer(args.lr)
-elif args.optimizer == 'GD':
+elif args.optimizer == 'gd':
     optimizer = tf.train.GradientDescentOptimizer(args.lr)
-elif args.optimizer == 'Adagrad':
+elif args.optimizer == 'adagrad':
     optimizer = tf.train.AdagradOptimizer(args.lr)
-elif args.optimizer == 'Momentum':
+elif args.optimizer == 'momentum':
     optimizer = tf.train.MomentumOptimizer(args.lr, args.momentum)
-elif args.optimizer == 'Adam':
+elif args.optimizer == 'adam':
     optimizer = tf.train.AdamOptimizer(args.lr)
-elif args.optimizer == 'Ftrl':
+elif args.optimizer == 'ftrl':
     optimizer = tf.train.FtrlOptimizer(args.lr)
-elif args.optimizer == 'PGD':
+elif args.optimizer == 'pgd':
     optimizer = tf.train.ProximalGradientDescentOptimizer(args.lr)
-elif args.optimizer == 'PAdagrad':
+elif args.optimizer == 'padagrad':
     optimizer = tf.train.ProximalAdagradOptimizer(args.lr)
 
-optimizer = optimizer.minimize(loss)
+print('optimizer:', optimizer, 'loss:', loss)
+train_step = optimizer.minimize(loss)
+# optimizer = optimizer.minimize(loss)
 # elif args.optimizer == 'ADAM'
 
     
@@ -130,6 +133,12 @@ total_params = visualize_parameters()
 print('Total params: {}'.format(total_params))
 
 
+# dataset
+# TODO: load this last? need the dataset size info though for model creation
+data = get_dataset(args.dataset)
+
+
+print('Starting training')
 start_epoch = sess.run(global_epoch)
 for epoch in range(start_epoch, args.epochs+start_epoch):
     epoch_start_time = time.time()
@@ -144,7 +153,7 @@ for epoch in range(start_epoch, args.epochs+start_epoch):
         #     xs = tf.image.rgb_to_grayscale(xs)
         # if args.grayscale:
         #     xs = cv2.cvtColor(xs, cv2.COLOR_BGR2GRAY)
-        _, l = sess.run([optimizer, loss], feed_dict={x_input: xs})
+        _, l = sess.run([train_step, loss], feed_dict={x_input: xs})
         total_train_loss += l
         completed += args.batchsize
         # sess.run(global_step.assign(completed + (epoch-1)*(n_trbatches*args.batchsize)))
