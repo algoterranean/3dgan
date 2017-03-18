@@ -62,7 +62,8 @@ import tensorflow as tf
 def _fc_layer(x, x_size, y_size):
     W = tf.Variable(tf.random_normal([x_size, y_size]))
     b = tf.Variable(tf.random_normal([y_size]))
-    return tf.nn.sigmoid(tf.add(tf.matmul(x, W), b))
+    l = tf.nn.sigmoid(tf.add(tf.matmul(x, W), b))
+    return l
 
 
 def simple_fc(x, layer_sizes):
@@ -73,12 +74,14 @@ def simple_fc(x, layer_sizes):
         x = tf.contrib.layers.flatten(x)
         flattened_size = int(list(x.get_shape())[1])
         print('input layer:', x, x.get_shape())
+        tf.summary.histogram('Input', x)
         
     with tf.variable_scope('encoder'):
         # encoder
         for size in layer_sizes:
             s = int(list(x.get_shape())[1])
             x = _fc_layer(x, s, size)
+            tf.summary.histogram('Encoder {}'.format(size), x)
             print('encoder:', x, x.get_shape())
 
     with tf.variable_scope('decoder'):
@@ -88,9 +91,11 @@ def simple_fc(x, layer_sizes):
         for size in layer_sizes[1::-1][1:]:
             s = int(list(x.get_shape())[1])
             x = _fc_layer(x, s, size)
+            tf.summary.histogram('Decoder {}'.format(size), x)
             print('decoder:', x, x.get_shape())
 
         x = _fc_layer(x, int(list(x.get_shape())[1]), flattened_size)
+        tf.summary.histogram('Output', x)
         print('final layer:', x, x.get_shape())
 
     with tf.variable_scope('output'):
@@ -187,7 +192,7 @@ def generate_example_row(data, tensor, xs, include_actual, sess, x_input, args):
                 input_img = data.test.images[i]
             if args.dataset == 'mnist':
                 input_img = np.reshape(input_img, [28, 28, 1])
-            print('pred:', pred.shape, 'input_img:', input_img.shape)
+            # print('pred:', pred.shape, 'input_img:', input_img.shape)
             v = np.vstack((input_img * 255.0, pred * 255.0))
         else:
             if args.grayscale:
@@ -249,10 +254,6 @@ def visualize_parameters():
     return total_params
 #+end_src
 
-* Callbacks
-** Logging
-** Inference
-
 * Main
 ** Imports
 #+begin_src python :tangle main.py
@@ -295,27 +296,14 @@ random.seed(args.seed)
 
 
 
-# model
 sess = tf.Session()
-# x = tf.placeholder("float", [None, 64, 64, 3])
-
 
 # dataset
 # TODO: load this last? need the dataset size info though for model creation
 data = get_dataset(args.dataset)
-# print(data.train)
-# print(data.train.__dict__)
-print('SAMPLE IMAGE', data.train.images[0].shape)
 
+# print('SAMPLE IMAGE', data.train.images[0].shape)
 # sample_image = data.train.dataset[:1]
-# print('sample image:', sample_image.shape)
-
-
-# if args.dataset == 'mnist':
-#     pass
-# elif args.dataset == 'floorplan':
-#     pass
-
 
 if args.dataset == 'mnist':
     x_input = tf.placeholder("float", [None, 784])
@@ -327,19 +315,12 @@ elif args.dataset == 'floorplan':
     else:
         x = x_input
 
-# x_input = tf.placeholder("float", [None, 64, 64, 3])
-# x_input = tf.placeholder("float", [None, 784])
 
-# if args.grayscale:
-#     x = tf.image.rgb_to_grayscale(x_input)
-# else:
-#     x = x_input
-    
+# model    
 if args.model == 'fc':
     y_hat = simple_fc(x, args.layers)
 elif args.model == 'cnn':
     y_hat = simple_cnn(x, args.layers)
-
 
 
     
@@ -354,6 +335,7 @@ elif args.loss == 'ssim':
     loss = 1.0 - tf_ssim(tf.image.rgb_to_grayscale(x), tf.image.rgb_to_grayscale(y_hat))
 elif args.loss == 'crossentropy':
     loss = -tf.reduce_sum(x * tf.log(y_hat))
+    
 
 # optimizer
 if args.optimizer == 'RMSProp':
@@ -384,6 +366,7 @@ global_epoch = tf.Variable(1, name='global_epoch', trainable=False)
 
 saver = tf.train.Saver()
 sess.run(tf.global_variables_initializer())
+
     
 montage = None
 
@@ -397,6 +380,11 @@ log_files = prep_workspace(args.dir, args.fresh)
 if not args.resume:
     pickle.dump(args, open(os.path.join(args.dir, 'settings'), 'wb'))
     tf.train.export_meta_graph(os.path.join(args.dir, 'model'))
+
+
+# tensorboard
+tb_writer = tf.summary.FileWriter(os.path.join(args.dir, 'logs'), graph=tf.get_default_graph())
+summary_node = tf.summary.merge_all()
 
 
 
@@ -477,6 +465,10 @@ for epoch in range(start_epoch, args.epochs+start_epoch):
         sys.stdout.flush()
 
     # sess.run(global_epoch.assign(epoch+1))
+
+    # tensorboard
+    summary_result = sess.run(summary_node, feed_dict={x_input: xs})
+    tb_writer.add_summary(summary_result, epoch)
         
     # snapshot
     if args.interactive:

@@ -32,27 +32,14 @@ random.seed(args.seed)
 
 
 
-# model
 sess = tf.Session()
-# x = tf.placeholder("float", [None, 64, 64, 3])
-
 
 # dataset
 # TODO: load this last? need the dataset size info though for model creation
 data = get_dataset(args.dataset)
-# print(data.train)
-# print(data.train.__dict__)
-print('SAMPLE IMAGE', data.train.images[0].shape)
 
+# print('SAMPLE IMAGE', data.train.images[0].shape)
 # sample_image = data.train.dataset[:1]
-# print('sample image:', sample_image.shape)
-
-
-# if args.dataset == 'mnist':
-#     pass
-# elif args.dataset == 'floorplan':
-#     pass
-
 
 if args.dataset == 'mnist':
     x_input = tf.placeholder("float", [None, 784])
@@ -64,19 +51,12 @@ elif args.dataset == 'floorplan':
     else:
         x = x_input
 
-# x_input = tf.placeholder("float", [None, 64, 64, 3])
-# x_input = tf.placeholder("float", [None, 784])
 
-# if args.grayscale:
-#     x = tf.image.rgb_to_grayscale(x_input)
-# else:
-#     x = x_input
-    
+# model    
 if args.model == 'fc':
     y_hat = simple_fc(x, args.layers)
 elif args.model == 'cnn':
     y_hat = simple_cnn(x, args.layers)
-
 
 
     
@@ -91,6 +71,7 @@ elif args.loss == 'ssim':
     loss = 1.0 - tf_ssim(tf.image.rgb_to_grayscale(x), tf.image.rgb_to_grayscale(y_hat))
 elif args.loss == 'crossentropy':
     loss = -tf.reduce_sum(x * tf.log(y_hat))
+    
 
 # optimizer
 if args.optimizer == 'RMSProp':
@@ -121,6 +102,7 @@ global_epoch = tf.Variable(1, name='global_epoch', trainable=False)
 
 saver = tf.train.Saver()
 sess.run(tf.global_variables_initializer())
+
     
 montage = None
 
@@ -134,6 +116,11 @@ log_files = prep_workspace(args.dir, args.fresh)
 if not args.resume:
     pickle.dump(args, open(os.path.join(args.dir, 'settings'), 'wb'))
     tf.train.export_meta_graph(os.path.join(args.dir, 'model'))
+
+
+# tensorboard
+tb_writer = tf.summary.FileWriter(os.path.join(args.dir, 'logs'), graph=tf.get_default_graph())
+summary_node = tf.summary.merge_all()
 
 graph = tf.get_default_graph()
 graph.finalize()
@@ -209,6 +196,10 @@ for epoch in range(start_epoch, args.epochs+start_epoch):
         sys.stdout.flush()
 
     # sess.run(global_epoch.assign(epoch+1))
+
+    # tensorboard
+    summary_result = sess.run(summary_node, feed_dict={x_input: xs})
+    tb_writer.add_summary(summary_result, epoch)
         
     # snapshot
     if args.interactive:

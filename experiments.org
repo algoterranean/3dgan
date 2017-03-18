@@ -1,5 +1,15 @@
 
+
 * Tests
+
+** CNN
+   #+begin_src sh :results output
+   python main.py --dataset floorplan --layers 128 64 --dir workspace/cnn1 --epochs 3 --model cnn
+   #+end_src
+
+   #+RESULTS:
+
+
 ** 4096 -> 1024
 *** RMSProp
     Learning rate = 0.1
@@ -954,6 +964,62 @@ python main.py --dataset floorplan --layers 4096 1024 --dir workspace/tests/rmsp
     Writing snapshot to disk...
     Total elapsed epoch time: 55.35764765739441
     Test loss: 0.48551
+#+end_example
+
+
+** 512 > 64
+   #+begin_src sh :results output
+   python main.py --dataset floorplan --layers 512 64 --dir workspace/tb --epochs 5 --model fc
+   #+end_src
+
+   #+RESULTS:
+   #+begin_example
+   Loading dataset...
+   input layer: Tensor("input/Flatten/Reshape:0", shape=(?, 12288), dtype=float32) (?, 12288)
+   encoder: Tensor("encoder/Sigmoid:0", shape=(?, 512), dtype=float32) (?, 512)
+   encoder: Tensor("encoder/Sigmoid_1:0", shape=(?, 64), dtype=float32) (?, 64)
+   decoder: Tensor("decoder/Sigmoid:0", shape=(?, 512), dtype=float32) (?, 512)
+   final layer: Tensor("decoder/Sigmoid_1:0", shape=(?, 12288), dtype=float32) (?, 12288)
+   reshape: [-1, 64, 64, 3]
+   Variable name: encoder/Variable:0, size: 6291456, shape: (12288, 512)
+   Variable name: encoder/Variable_1:0, size: 512, shape: (512,)
+   Variable name: encoder/Variable_2:0, size: 32768, shape: (512, 64)
+   Variable name: encoder/Variable_3:0, size: 64, shape: (64,)
+   Variable name: decoder/Variable:0, size: 32768, shape: (64, 512)
+   Variable name: decoder/Variable_1:0, size: 512, shape: (512,)
+   Variable name: decoder/Variable_2:0, size: 6291456, shape: (512, 12288)
+   Variable name: decoder/Variable_3:0, size: 12288, shape: (12288,)
+   Total params: 12661824
+   Epoch 1: Train loss (0.38931), elapsed time 9.643645763397217
+   Epoch 1: Validation loss (0.33182), elapsed time 0.9982404708862305
+   Generating examples to disk...
+   Writing snapshot to disk...
+   Total elapsed epoch time: 11.287230730056763
+   Epoch 2: Train loss (0.32305), elapsed time 9.48381495475769
+   Epoch 2: Validation loss (0.31802), elapsed time 1.0011019706726074
+   Generating examples to disk...
+   row: (64, 640, 3) montage: (128, 640, 3)
+   Writing snapshot to disk...
+   Total elapsed epoch time: 11.050352096557617
+   Epoch 3: Train loss (0.31458), elapsed time 9.481757879257202
+   Epoch 3: Validation loss (0.31234), elapsed time 1.0014595985412598
+   Generating examples to disk...
+   row: (64, 640, 3) montage: (192, 640, 3)
+   Writing snapshot to disk...
+   Total elapsed epoch time: 11.040754318237305
+   Epoch 4: Train loss (0.31001), elapsed time 9.602140426635742
+   Epoch 4: Validation loss (0.30863), elapsed time 0.9997425079345703
+   Generating examples to disk...
+   row: (64, 640, 3) montage: (256, 640, 3)
+   Writing snapshot to disk...
+   Total elapsed epoch time: 11.219076871871948
+   Epoch 5: Train loss (0.30739), elapsed time 9.689560174942017
+   Epoch 5: Validation loss (0.30532), elapsed time 1.0006065368652344
+   Generating examples to disk...
+   row: (64, 640, 3) montage: (320, 640, 3)
+   Writing snapshot to disk...
+   Total elapsed epoch time: 11.214133024215698
+   Test loss: 0.30528
 #+end_example
 
 
@@ -4059,25 +4125,8 @@ python main.py --dataset floorplan --layers 4096 1024 --dir workspace/TEST --epo
 * Simple CNN
 ** 256 > 128 > 64 < 128 < 256
    #+begin_src sh :results output
-
-   python main.py --dataset floorplan --layers 256 128 --dir workspace/cnn1 --epochs 3
+   python main.py --dataset floorplan --layers 256 128 64 --dir workspace/cnn1 --epochs 3 --model cnn
    #+end_src
 
    #+RESULTS:
-   #+begin_example
-   Loading dataset...
-   Epoch 1: Train loss (5857900.69630)
-   Epoch 1: Validation loss (2714.05615)
-   Generating examples to disk...
-   Writing snapshot to disk...
-   Epoch 2: Train loss (1163344.53834)
-   Epoch 2: Validation loss (4250.64540)
-   Generating examples to disk...
-   Writing snapshot to disk...
-   Epoch 3: Train loss (5688532.39311)
-   Epoch 3: Validation loss (41.51008)
-   Generating examples to disk...
-   Writing snapshot to disk...
-   Test loss: 41.46348
-#+end_example
 

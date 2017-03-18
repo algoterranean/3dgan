@@ -20,7 +20,7 @@ def generate_example_row(data, tensor, xs, include_actual, sess, x_input, args):
                 input_img = data.test.images[i]
             if args.dataset == 'mnist':
                 input_img = np.reshape(input_img, [28, 28, 1])
-            print('pred:', pred.shape, 'input_img:', input_img.shape)
+            # print('pred:', pred.shape, 'input_img:', input_img.shape)
             v = np.vstack((input_img * 255.0, pred * 255.0))
         else:
             if args.grayscale:
