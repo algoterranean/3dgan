@@ -122,6 +122,7 @@ if not args.resume:
 tb_writer = tf.summary.FileWriter(os.path.join(args.dir, 'logs'), graph=tf.get_default_graph())
 summary_node = tf.summary.merge_all()
 
+# finalize graph for improved performance
 graph = tf.get_default_graph()
 graph.finalize()
 
@@ -198,8 +199,9 @@ for epoch in range(start_epoch, args.epochs+start_epoch):
     # sess.run(global_epoch.assign(epoch+1))
 
     # tensorboard
-    summary_result = sess.run(summary_node, feed_dict={x_input: xs})
-    tb_writer.add_summary(summary_result, epoch)
+    if summary_node is not None:
+        summary_result = sess.run(summary_node, feed_dict={x_input: xs})
+        tb_writer.add_summary(summary_result, epoch)
         
     # snapshot
     if args.interactive:
