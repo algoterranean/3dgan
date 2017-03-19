@@ -42,11 +42,13 @@ if args.resume:
     
     
 
-# for repeatability purposes
+# seed
 print('Setting seed to', args.seed)
 random.seed(args.seed)
 
+# session and global vars
 sess = tf.Session()
+
 # variables to track training progress. useful when resuming training from disk.
 with tf.variable_scope('global_vars'):
     global_step = tf.Variable(0, name='global_step', trainable=False)
@@ -54,8 +56,8 @@ with tf.variable_scope('global_vars'):
     global_batchsize = tf.Variable(args.batchsize, name='global_batchsize', trainable=False)
 
 
-# print('SAMPLE IMAGE', data.train.images[0].shape)
-# sample_image = data.train.dataset[:1]
+# input tensor for dataset.
+# TODO: move this to Dataset class or something. should be self-describing
 
 if args.dataset == 'mnist':
     x_input = tf.placeholder("float", [None, 784])
@@ -83,8 +85,6 @@ with tf.variable_scope('loss_functions'):
                       'crossentropy': -tf.reduce_sum(x * tf.log(y_hat))}
 loss = loss_functions[args.loss]
 
-
-
 # optimizer
 with tf.variable_scope('optimizers'):
     optimizers = {'rmsprop': tf.train.RMSPropOptimizer(args.lr, args.decay, args.momentum, centered=args.centered),
@@ -97,6 +97,7 @@ with tf.variable_scope('optimizers'):
                   'pgd': tf.train.ProximalGradientDescentOptimizer(args.lr),
                   'padagrad': tf.train.ProximalAdagradOptimizer(args.lr)}
 optimizer = optimizers[args.optimizer]
+
 # training step
 train_step = optimizer.minimize(loss, global_step=global_step)
 
@@ -105,6 +106,7 @@ train_step = optimizer.minimize(loss, global_step=global_step)
         
 # workspace
 log_files = prep_workspace(args.dir)
+
 
 # session saving/loading
 saver = tf.train.Saver()
@@ -141,7 +143,8 @@ print('Starting training')
 start_epoch = sess.run(global_epoch)
 for epoch in range(start_epoch, args.epochs+start_epoch):
     epoch_start_time = time.time()
-    start_time = time.time()
+    training_start_time = time.time()
+    
     # perform training
     n_trbatches = int(data.train.num_examples/args.batchsize)
     completed = 0
@@ -155,24 +158,24 @@ for epoch in range(start_epoch, args.epochs+start_epoch):
         log_files['train_loss'].write('{:05d},{:.5f}\n'.format(completed + (epoch-1)*(n_trbatches*args.batchsize), l))
         if args.interactive:
             print_progress(epoch, completed, data.train.num_examples, l)
-    end_time = time.time()
+    training_end_time = time.time()
     if not args.interactive:
-        print('Epoch {}: Train loss ({:.5f}), elapsed time {}'.format(epoch, total_train_loss/n_trbatches, end_time-start_time))
+        print('Epoch {}: Train loss ({:.5f}), elapsed time {}'.format(epoch, total_train_loss/n_trbatches, training_end_time-training_start_time))
 
-    start_time = time.time()
+    validation_start_time = time.time()
     # perform validation
     n_valbatches = int(data.validation.num_examples/args.batchsize)
     vl = 0.0
     for i in range(n_valbatches):
         xs, ys = data.validation.next_batch(args.batchsize)
         vl += sess.run(loss, feed_dict={x_input: xs})
-    end_time = time.time()
+    validation_end_time = time.time()
     log_files['validate_loss'].write('{:05d},{:.5f}\n'.format(completed + (epoch-1)*(n_trbatches*args.batchsize), vl/n_valbatches))
     if args.interactive:
         sys.stdout.write(', validation: {:.4f}'.format(vl/n_valbatches))
         sys.stdout.write('\r\n')
     else:
-        print('Epoch {}: Validation loss ({:.5f}), elapsed time {}'.format(epoch, vl/n_valbatches, end_time - start_time))
+        print('Epoch {}: Validation loss ({:.5f}), elapsed time {}'.format(epoch, vl/n_valbatches, validation_end_time - validation_start_time))
 
     # montage
     if args.interactive:

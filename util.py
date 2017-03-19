@@ -64,7 +64,6 @@ def prep_workspace(dirname):
 def plot_loss(image_dir):
     pass
 
-
 def visualize_parameters():
     total_params = 0
     for variable in tf.trainable_variables():
