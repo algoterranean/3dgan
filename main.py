@@ -8,7 +8,7 @@ from util import *
 
 
 
-
+# command line arguments
 parser = argparse.ArgumentParser()
 parser.add_argument('--epochs', type=int, default=3)
 parser.add_argument('--batchsize', type=int, default=256)
@@ -52,22 +52,20 @@ sess = tf.Session()
 # variables to track training progress. useful when resuming training from disk.
 with tf.variable_scope('global_vars'):
     global_step = tf.Variable(0, name='global_step', trainable=False)
-    global_epoch = tf.Variable(1, name='global_epoch', trainable=False)
+    global_epoch = tf.Variable(0, name='global_epoch', trainable=False)
     global_batchsize = tf.Variable(args.batchsize, name='global_batchsize', trainable=False)
 
 
 # input tensor for dataset.
-# TODO: move this to Dataset class or something. should be self-describing
-
+# x_input is the tensor for our actual data
+# x is the tensor to be passed to the model (that is, after processing of actual data)
+# TODO: move this to Dataset class or something. dataset should be self-describing
 if args.dataset == 'mnist':
     x_input = tf.placeholder("float", [None, 784])
     x = tf.reshape(x_input, [-1, 28, 28, 1])
 elif args.dataset == 'floorplan':
     x_input = tf.placeholder("float", [None, 64, 64, 3])
-    if args.grayscale:
-        x = tf.image.rgb_to_grayscale(x_input)
-    else:
-        x = x_input
+    x = tf.image.rgb_to_grayscale(x_input) if args.grayscale else x_input
 
 
 # model    
@@ -118,9 +116,7 @@ else:
     #saver = tf.train.import_meta_graph(os.path.join(args.dir, 'model'))
     sess.run(tf.global_variables_initializer())
     saver.restore(sess, tf.train.latest_checkpoint(os.path.join(args.dir, 'checkpoints')))
-    print('Model restored. Current step=', sess.run(global_step), ', epoch=', sess.run(global_epoch), ', batch size=', sess.run(global_batchsize))
-    
-
+    print('Model restored. Currently at step {} and epoch {} with batch size {}'.format(sess.run(global_step), sess.run(global_epoch), sess.run(global_batchsize)))
 
 # tensorboard
 montage = None
@@ -139,65 +135,64 @@ print('Total params: {}'.format(total_params))
 data = get_dataset(args.dataset)
 
 
+# training!
 print('Starting training')
-start_epoch = sess.run(global_epoch)
+start_epoch = sess.run(global_epoch) + 1
+n_trbatches = int(data.train.num_examples/args.batchsize)
+iterations_completed = sess.run(global_step) * args.batchsize
+print('iterations completed:', iterations_completed)
+
 for epoch in range(start_epoch, args.epochs+start_epoch):
     epoch_start_time = time.time()
     training_start_time = time.time()
     
     # perform training
-    n_trbatches = int(data.train.num_examples/args.batchsize)
-    completed = 0
     total_train_loss = 0.0
     for i in range(n_trbatches):
         xs, ys = data.train.next_batch(args.batchsize)
         _, l = sess.run([train_step, loss], feed_dict={x_input: xs})
         total_train_loss += l
-        completed += args.batchsize
-        # sess.run(global_step.assign(completed + (epoch-1)*(n_trbatches*args.batchsize)))
-        log_files['train_loss'].write('{:05d},{:.5f}\n'.format(completed + (epoch-1)*(n_trbatches*args.batchsize), l))
+        iterations_completed += args.batchsize
+        log_files['train_loss'].write('{:05d},{:.5f}\n'.format(iterations_completed, l))
         if args.interactive:
-            print_progress(epoch, completed, data.train.num_examples, l)
+            print_progress(epoch, iterations_completed, data.train.num_examples, l)
+    avg_train_loss = total_train_loss/n_trbatches
     training_end_time = time.time()
     if not args.interactive:
-        print('Epoch {}: Train loss ({:.5f}), elapsed time {}'.format(epoch, total_train_loss/n_trbatches, training_end_time-training_start_time))
-
-    validation_start_time = time.time()
+        print('Epoch {}: Train loss ({:.5f}), elapsed time {}'.format(epoch, avg_train_loss, training_end_time-training_start_time))
+        
     # perform validation
+    validation_start_time = time.time()
     n_valbatches = int(data.validation.num_examples/args.batchsize)
-    vl = 0.0
+    total_validation_loss = 0.0
     for i in range(n_valbatches):
         xs, ys = data.validation.next_batch(args.batchsize)
-        vl += sess.run(loss, feed_dict={x_input: xs})
+        total_validation_loss += sess.run(loss, feed_dict={x_input: xs})
     validation_end_time = time.time()
-    log_files['validate_loss'].write('{:05d},{:.5f}\n'.format(completed + (epoch-1)*(n_trbatches*args.batchsize), vl/n_valbatches))
+    avg_validation_loss = total_validation_loss/n_valbatches
+    log_files['validate_loss'].write('{:05d},{:.5f}\n'.format(iterations_completed, avg_validation_loss))
     if args.interactive:
-        sys.stdout.write(', validation: {:.4f}'.format(vl/n_valbatches))
+        sys.stdout.write(', validation: {:.4f}'.format(avg_validation_loss))
         sys.stdout.write('\r\n')
     else:
-        print('Epoch {}: Validation loss ({:.5f}), elapsed time {}'.format(epoch, vl/n_valbatches, validation_end_time - validation_start_time))
+        print('Epoch {}: Validation loss ({:.5f}), elapsed time {}'.format(epoch, avg_validation_loss, validation_end_time - validation_start_time))
 
-    # montage
+    # generate examples for montage
     if args.interactive:
         sys.stdout.write('Generating examples to disk...')
     else:
         print('Generating examples to disk...')
-    # TODO: should reshape this on the fly, and only if necessary
     examples = data.test.images[:args.examples]
     row = generate_example_row(data, y_hat, examples, epoch==1, sess, x_input, args)
-    if montage is not None:
-        print('row:', row.shape, 'montage:', montage.shape)
     imgfile = os.path.join(args.dir, 'images', 'montage_{:03d}.png'.format(epoch))
     cv2.imwrite(imgfile, row)
+    # add this epoch's examples to montage
     montage = row if montage is None else np.vstack((montage, row))
     if args.interactive:
         sys.stdout.write('complete!\r\n')
         sys.stdout.flush()
 
-    # keep track of current epoch
-    sess.run(global_epoch.assign(epoch+1))
-
-    # tensorboard
+    # update tensorboard nodes
     if summary_node is not None:
         summary_result = sess.run(summary_node, feed_dict={x_input: xs})
         tb_writer.add_summary(summary_result, epoch)
@@ -215,26 +210,35 @@ for epoch in range(start_epoch, args.epochs+start_epoch):
     epoch_end_time = time.time()
     print('Total elapsed epoch time: {}'.format(epoch_end_time - epoch_start_time))
 
+    # keep track of current epoch
+    sess.run(global_epoch.assign(epoch+1))
+    
+
+    
+# training completed!
+
 # save complete montage
 cv2.imwrite(os.path.join(args.dir, 'images', 'montage.png'), montage)
     
 # perform test
-n_tebatches = int(data.test.num_examples/args.batchsize)
-tel = 0.0
-completed = 0
-for i in range(n_tebatches):
+n_testbatches = int(data.test.num_examples/args.batchsize)
+total_test_loss = 0.0
+for i in range(n_testbatches):
     xs, ys = data.test.next_batch(args.batchsize)
-    tel += sess.run(loss, feed_dict={x_input: xs})
-    completed += args.batchsize
+    l = sess.run(loss, feed_dict={x_input: xs})
+    total_test_loss += l
     if args.interactive:
         sys.stdout.write('\r')
         sys.stdout.write('test: {:.4f}'.format(l))
         sys.stdout.flush()
-log_files['test_loss'].write('{:05d},{:.5f}\n'.format((epoch) * n_trbatches * args.batchsize, tel/n_tebatches))
+avg_test_loss = total_test_loss/n_testbatches
+log_files['test_loss'].write('{:05d},{:.5f}\n'.format(iterations_completed, avg_test_loss))
 if args.interactive:
     sys.stdout.write('\r\n')
 else:
-    print('Test loss: {:.5f}'.format(tel/n_tebatches))
+    print('Test loss: {:.5f}'.format(avg_test_loss))
+
+    
 
 # close down log files
 for key in log_files:
