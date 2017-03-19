@@ -70,9 +70,10 @@ elif args.dataset == 'floorplan':
 
 # model    
 if args.model == 'fc':
-    y_hat = simple_fc(x, args.layers)
+    y_hat, model_summary_nodes = simple_fc(x, args.layers)
 elif args.model == 'cnn':
-    y_hat = simple_cnn(x, args.layers)
+    y_hat, model_summary_nodes = simple_cnn(x, args.layers)
+
 
 # loss
 with tf.variable_scope('loss_functions'):
@@ -118,10 +119,19 @@ else:
     saver.restore(sess, tf.train.latest_checkpoint(os.path.join(args.dir, 'checkpoints')))
     print('Model restored. Currently at step {} and epoch {} with batch size {}'.format(sess.run(global_step), sess.run(global_epoch), sess.run(global_batchsize)))
 
+
 # tensorboard
 montage = None
 tb_writer = tf.summary.FileWriter(os.path.join(args.dir, 'logs'), graph=tf.get_default_graph())
-summary_node = tf.summary.merge_all()
+# add tensorboard node on model output for generating examples
+epoch_summary_nodes = tf.summary.merge([model_summary_nodes, tf.summary.image('model_output', y_hat)])
+batch_summary_nodes = tf.summary.merge([tf.summary.scalar('loss', loss),
+                                        tf.summary.scalar('l1', loss_functions['l1']),
+                                        tf.summary.scalar('l2', loss_functions['l2']),
+                                        tf.summary.scalar('rmse', loss_functions['rmse']),
+                                        tf.summary.scalar('crossentropy', loss_functions['crossentropy'])])
+train_start_summary_nodes = None
+train_end_summary_nodes = None
 
 
 # print out schematic/visualization of model
@@ -133,6 +143,9 @@ print('Total params: {}'.format(total_params))
 
 # dataset
 data = get_dataset(args.dataset)
+# example data for visualizing results/progress
+sample_indexes = np.random.choice(data.test.images.shape[0], args.examples, replace=False)
+example_images = data.test.images[sample_indexes, :]
 
 
 # training!
@@ -140,12 +153,12 @@ print('Starting training')
 start_epoch = sess.run(global_epoch) + 1
 n_trbatches = int(data.train.num_examples/args.batchsize)
 iterations_completed = sess.run(global_step) * args.batchsize
-print('iterations completed:', iterations_completed)
+
 
 for epoch in range(start_epoch, args.epochs+start_epoch):
     epoch_start_time = time.time()
     training_start_time = time.time()
-    
+
     # perform training
     total_train_loss = 0.0
     for i in range(n_trbatches):
@@ -156,6 +169,11 @@ for epoch in range(start_epoch, args.epochs+start_epoch):
         log_files['train_loss'].write('{:05d},{:.5f}\n'.format(iterations_completed, l))
         if args.interactive:
             print_progress(epoch, iterations_completed, data.train.num_examples, l)
+        if batch_summary_nodes is not None:
+            summary_result = sess.run(batch_summary_nodes, feed_dict={x_input: xs})
+            tb_writer.add_summary(summary_result, iterations_completed)
+            
+        
     avg_train_loss = total_train_loss/n_trbatches
     training_end_time = time.time()
     if not args.interactive:
@@ -177,13 +195,14 @@ for epoch in range(start_epoch, args.epochs+start_epoch):
     else:
         print('Epoch {}: Validation loss ({:.5f}), elapsed time {}'.format(epoch, avg_validation_loss, validation_end_time - validation_start_time))
 
+
+        
     # generate examples for montage
     if args.interactive:
         sys.stdout.write('Generating examples to disk...')
     else:
         print('Generating examples to disk...')
-    examples = data.test.images[:args.examples]
-    row = generate_example_row(data, y_hat, examples, epoch==1, sess, x_input, args)
+    row = generate_example_row(data, y_hat, example_images, epoch==1, sess, x_input, args)
     imgfile = os.path.join(args.dir, 'images', 'montage_{:03d}.png'.format(epoch))
     cv2.imwrite(imgfile, row)
     # add this epoch's examples to montage
@@ -193,9 +212,10 @@ for epoch in range(start_epoch, args.epochs+start_epoch):
         sys.stdout.flush()
 
     # update tensorboard nodes
-    if summary_node is not None:
-        summary_result = sess.run(summary_node, feed_dict={x_input: xs})
+    if epoch_summary_nodes is not None:
+        summary_result = sess.run(epoch_summary_nodes, feed_dict={x_input: example_images})
         tb_writer.add_summary(summary_result, epoch)
+        
         
     # snapshot
     if args.interactive:

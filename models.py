@@ -11,20 +11,21 @@ def _fc_layer(x, x_size, y_size):
 
 def simple_fc(x, layer_sizes):
     orig_shape = list(x.get_shape())
+    summary_nodes = []
 
     with tf.variable_scope('input'):
         # flatten        
         x = tf.contrib.layers.flatten(x)
         flattened_size = int(list(x.get_shape())[1])
         print('input layer:', x, x.get_shape())
-        tf.summary.histogram('Input', x)
+        summary_nodes.append(tf.summary.histogram('Input', x))
         
     with tf.variable_scope('encoder'):
         # encoder
         for size in layer_sizes:
             s = int(list(x.get_shape())[1])
             x = _fc_layer(x, s, size)
-            tf.summary.histogram('Encoder {}'.format(size), x)
+            summary_nodes.append(tf.summary.histogram('Encoder {}'.format(size), x))
             print('encoder:', x, x.get_shape())
 
     with tf.variable_scope('decoder'):
@@ -34,11 +35,11 @@ def simple_fc(x, layer_sizes):
         for size in layer_sizes[1::-1][1:]:
             s = int(list(x.get_shape())[1])
             x = _fc_layer(x, s, size)
-            tf.summary.histogram('Decoder {}'.format(size), x)
+            summary_nodes.append(tf.summary.histogram('Decoder {}'.format(size), x))
             print('decoder:', x, x.get_shape())
 
         x = _fc_layer(x, int(list(x.get_shape())[1]), flattened_size)
-        tf.summary.histogram('Output', x)
+        summary_nodes.append(tf.summary.histogram('Output', x))
         print('final layer:', x, x.get_shape())
 
     with tf.variable_scope('output'):
@@ -48,7 +49,7 @@ def simple_fc(x, layer_sizes):
         print('reshape:', l)
         x = tf.reshape(x, l)
 
-    return x
+    return x, tf.summary.merge(summary_nodes)
 
 
 
@@ -84,29 +85,23 @@ def _upconv_layer(x, num_filters):
 def simple_cnn(x, layer_sizes):
     # input
     orig_shape = x.get_shape().as_list()
-    # print('i)', x.get_shape())
+    summary_nodes = []    
 
     # encoder
     with tf.variable_scope('encoder'):
         for out_size in layer_sizes:
             x = _downconv_layer(x, out_size)
-            # attach summary histogram
-            tf.summary.histogram('Encoder {}'.format(out_size), x)
-            # print('e)', x.get_shape())
+            summary_nodes.append(tf.summary.histogram('Encoder {}'.format(out_size), x))
 
 
     # decoder
     with tf.variable_scope('decoder'):
         for out_size in layer_sizes[1::-1]:
             x = _upconv_layer(x, out_size)
-            # attach summary histogram
-            tf.summary.histogram('Decoder {}'.format(out_size),x)
-            # print('d)', x.get_shape())
+            summary_nodes.append(tf.summary.histogram('Decoder {}'.format(out_size),x))
 
         # output
         x = _upconv_layer(x, orig_shape[3])
-        # attach summary histogram
-        tf.summary.histogram('Output', x)
-        # print('o)', x.get_shape())
+        summary_nodes.append(tf.summary.histogram('Output', x))
         
-    return x
+    return x, tf.summary.merge(summary_nodes)
