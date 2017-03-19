@@ -74,3 +74,14 @@ def visualize_parameters():
         total_params += num_params
         print('Variable name: {}, size: {}, shape: {}'.format(variable.name, num_params, variable.get_shape()))
     return total_params
+
+
+OKBLUE = '\033[94m'
+ENDC = '\033[0m'
+BOLD = '\033[1m'
+
+def debug(*args):
+    if len(args) > 1:
+        print(BOLD + OKBLUE + str(args[0]), *(args[1:]), ENDC)
+    else:
+        print(BOLD + OKBLUE + str(args[0]), ENDC)
