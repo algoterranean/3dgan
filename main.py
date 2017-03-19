@@ -30,10 +30,7 @@ args = parser.parse_args()
 # for repeatability purposes
 random.seed(args.seed)
 
-
-
 sess = tf.Session()
-
 
 # print('SAMPLE IMAGE', data.train.images[0].shape)
 # sample_image = data.train.dataset[:1]
@@ -55,64 +52,47 @@ if args.model == 'fc':
 elif args.model == 'cnn':
     y_hat = simple_cnn(x, args.layers)
 
-print('data input shape:', x_input.get_shape())
-print('model input shape:', x.get_shape())
-print('model output shape:', y_hat.get_shape())
-
-
-# with tf.variable_scope('loss_functions'):
-    
 # loss
-if args.loss == 'l1':
-    loss = tf.reduce_mean(tf.abs(x - y_hat))
-elif args.loss == 'l2':
-    loss = tf.reduce_mean(tf.pow(x - y_hat, 2))
-elif args.loss == 'rmse':
-    loss = tf.sqrt(tf.reduce_mean(tf.pow(x - y_hat, 2)))
-elif args.loss == 'ssim':
-    loss = 1.0 - tf_ssim(tf.image.rgb_to_grayscale(x), tf.image.rgb_to_grayscale(y_hat))
-elif args.loss == 'crossentropy':
-    loss = -tf.reduce_sum(x * tf.log(y_hat))
+with tf.variable_scope('loss_functions'):
+    loss_functions = {'l1': tf.reduce_mean(tf.abs(x - y_hat)),
+                      'l2': tf.reduce_mean(tf.pow(x - y_hat, 2)),
+                      'rmse': tf.sqrt(tf.reduce_mean(tf.pow(x - y_hat, 2))),
+                      'ssim': 1.0 - tf_ssim(tf.image.rgb_to_grayscale(x), tf.image.rgb_to_grayscale(y_hat)),
+                      'crossentropy': -tf.reduce_sum(x * tf.log(y_hat))}
+loss = loss_functions[args.loss]
+
+
 
 # optimizer
-if args.optimizer == 'rmsprop':
-    optimizer = tf.train.RMSPropOptimizer(args.lr, args.decay, args.momentum, centered=args.centered)
-elif args.optimizer == 'adadelta':
-    optimizer = tf.train.AdadeltaOptimizer(args.lr)
-elif args.optimizer == 'gd':
-    optimizer = tf.train.GradientDescentOptimizer(args.lr)
-elif args.optimizer == 'adagrad':
-    optimizer = tf.train.AdagradOptimizer(args.lr)
-elif args.optimizer == 'momentum':
-    optimizer = tf.train.MomentumOptimizer(args.lr, args.momentum)
-elif args.optimizer == 'adam':
-    optimizer = tf.train.AdamOptimizer(args.lr)
-elif args.optimizer == 'ftrl':
-    optimizer = tf.train.FtrlOptimizer(args.lr)
-elif args.optimizer == 'pgd':
-    optimizer = tf.train.ProximalGradientDescentOptimizer(args.lr)
-elif args.optimizer == 'padagrad':
-    optimizer = tf.train.ProximalAdagradOptimizer(args.lr)
-
-print('optimizer:', optimizer, 'loss:', loss)
+with tf.variable_scope('optimizers'):
+    optimizers = {'rmsprop': tf.train.RMSPropOptimizer(args.lr, args.decay, args.momentum, centered=args.centered),
+                  'adadelta': tf.train.AdadeltaOptimizer(args.lr),
+                  'gd': tf.train.GradientDescentOptimizer(args.lr),
+                  'adagrad': tf.train.AdagradOptimizer(args.lr),
+                  'momentum': tf.train.MomentumOptimizer(args.lr, args.momentum),
+                  'adam': tf.train.AdamOptimizer(args.lr),
+                  'ftrl': tf.train.FtrlOptimizer(args.lr),
+                  'pgd': tf.train.ProximalGradientDescentOptimizer(args.lr),
+                  'padagrad': tf.train.ProximalAdagradOptimizer(args.lr)}
+optimizer = optimizers[args.optimizer]
+# training step
 train_step = optimizer.minimize(loss)
-# optimizer = optimizer.minimize(loss)
-# elif args.optimizer == 'ADAM'
 
-    
+# TODO: still used?
 global_step = tf.Variable(0, name='global_step', trainable=False)
 global_epoch = tf.Variable(1, name='global_epoch', trainable=False)
 
+
+# session saving/loading
 saver = tf.train.Saver()
 sess.run(tf.global_variables_initializer())
-
-    
-montage = None
 
 if args.resume:
     #saver = tf.train.import_meta_graph(os.path.join(args.dir, 'model'))
     saver.restore(sess, tf.train.latest_checkpoint(os.path.join(args.dir, 'checkpoints')))
     print('Model restored. Global step:', sess.run(global_step))
+
+    
         
 # workspace
 log_files = prep_workspace(args.dir, args.fresh)
@@ -122,6 +102,7 @@ if not args.resume:
 
 
 # tensorboard
+montage = None
 tb_writer = tf.summary.FileWriter(os.path.join(args.dir, 'logs'), graph=tf.get_default_graph())
 summary_node = tf.summary.merge_all()
 
@@ -149,10 +130,6 @@ for epoch in range(start_epoch, args.epochs+start_epoch):
     total_train_loss = 0.0
     for i in range(n_trbatches):
         xs, ys = data.train.next_batch(args.batchsize)
-        # if args.grayscale:
-        #     xs = tf.image.rgb_to_grayscale(xs)
-        # if args.grayscale:
-        #     xs = cv2.cvtColor(xs, cv2.COLOR_BGR2GRAY)
         _, l = sess.run([train_step, loss], feed_dict={x_input: xs})
         total_train_loss += l
         completed += args.batchsize
@@ -186,15 +163,6 @@ for epoch in range(start_epoch, args.epochs+start_epoch):
         print('Generating examples to disk...')
     # TODO: should reshape this on the fly, and only if necessary
     examples = data.test.images[:args.examples]
-    # if args.dataset == 'mnist':
-    #     examples = data.test.images[:args.examples]
-    # else:
-    #     examples = data.test.dataset[:args.examples]
-    # tf.reshape(tf.image.rgb_to_grayscale(x), (-1, 64*64))
-        
-    # examples = np.reshape(examples, (args.examples, 64*64*3))
-    # examples = np.reshape(examples, (args.examples, 64*64))
-    # examples = tf.image
     row = generate_example_row(data, y_hat, examples, epoch==1, sess, x_input, args)
     if montage is not None:
         print('row:', row.shape, 'montage:', montage.shape)
