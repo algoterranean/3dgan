@@ -80,7 +80,7 @@ def _upconv_layer(x, num_filters):
     l = tf.nn.relu(l)
     return l
     
-
+# TODO: build decoder from same weights as encoder
 def simple_cnn(x, layer_sizes):
     # input
     orig_shape = x.get_shape().as_list()

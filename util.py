@@ -45,16 +45,11 @@ def get_dataset(name):
         return Floorplans()
 
 
-def prep_workspace(dirname, fresh):
+def prep_workspace(dirname):
     subdirs = [os.path.join(dirname, "checkpoints"),
                os.path.join(dirname, "images"),
                os.path.join(dirname, "logs")]
 
-    # # yikes... this is probably not a good idea
-    # if fresh and os.path.exists(dirname):
-    #     shutil.rmtree(dirname)
-    #     # os.rmtree(dirname)
-        
     if not os.path.exists(dirname):
         os.makedirs(dirname)
     for d in subdirs:
