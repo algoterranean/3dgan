@@ -6,6 +6,9 @@ from msssim import MultiScaleSSIM, tf_ssim, tf_ms_ssim
 from data import Floorplans
 from util import *
 
+
+
+
 parser = argparse.ArgumentParser()
 parser.add_argument('--epochs', type=int, default=3)
 parser.add_argument('--batchsize', type=int, default=256)
@@ -27,10 +30,30 @@ parser.add_argument('--decay', type=float, default=0.9)
 parser.add_argument('--centered', default=False, action='store_true')
 args = parser.parse_args()
 
+# TODO: should keep the args that were passed in this time
+if args.resume:
+    # copy passed-in values
+    args_copy = argparse.Namespace(**vars(args))
+    # load previous args
+    args = pickle.load(open(os.path.join(args.dir, 'settings'), 'rb'))
+    # adjust for new passed in values
+    args.resume = True
+    args.epochs = args_copy.epochs
+    print('Args restored')    
+    
+    
+
 # for repeatability purposes
+print('Setting seed to', args.seed)
 random.seed(args.seed)
 
 sess = tf.Session()
+# variables to track training progress. useful when resuming training from disk.
+with tf.variable_scope('global_vars'):
+    global_step = tf.Variable(0, name='global_step', trainable=False)
+    global_epoch = tf.Variable(1, name='global_epoch', trainable=False)
+    global_batchsize = tf.Variable(args.batchsize, name='global_batchsize', trainable=False)
+
 
 # print('SAMPLE IMAGE', data.train.images[0].shape)
 # sample_image = data.train.dataset[:1]
@@ -76,29 +99,28 @@ with tf.variable_scope('optimizers'):
                   'padagrad': tf.train.ProximalAdagradOptimizer(args.lr)}
 optimizer = optimizers[args.optimizer]
 # training step
-train_step = optimizer.minimize(loss)
+train_step = optimizer.minimize(loss, global_step=global_step)
 
-# TODO: still used?
-global_step = tf.Variable(0, name='global_step', trainable=False)
-global_epoch = tf.Variable(1, name='global_epoch', trainable=False)
-
-
-# session saving/loading
-saver = tf.train.Saver()
-sess.run(tf.global_variables_initializer())
-
-if args.resume:
-    #saver = tf.train.import_meta_graph(os.path.join(args.dir, 'model'))
-    saver.restore(sess, tf.train.latest_checkpoint(os.path.join(args.dir, 'checkpoints')))
-    print('Model restored. Global step:', sess.run(global_step))
 
     
         
 # workspace
 log_files = prep_workspace(args.dir, args.fresh)
+
+# session saving/loading
+saver = tf.train.Saver()
 if not args.resume:
     pickle.dump(args, open(os.path.join(args.dir, 'settings'), 'wb'))
     tf.train.export_meta_graph(os.path.join(args.dir, 'model'))
+    sess.run(tf.global_variables_initializer())
+else:
+    #saver = tf.train.import_meta_graph(os.path.join(args.dir, 'model'))
+    sess.run(tf.global_variables_initializer())
+    saver.restore(sess, tf.train.latest_checkpoint(os.path.join(args.dir, 'checkpoints')))
+    print('Model restored. Current step=', sess.run(global_step), ', epoch=', sess.run(global_epoch), ', batch size=', sess.run(global_batchsize))
+    
+
+
 
 
 # tensorboard
@@ -106,9 +128,10 @@ montage = None
 tb_writer = tf.summary.FileWriter(os.path.join(args.dir, 'logs'), graph=tf.get_default_graph())
 summary_node = tf.summary.merge_all()
 
+
 # finalize graph for improved performance
-graph = tf.get_default_graph()
-graph.finalize()
+# TODO: still needed?
+# tf.get_default_graph().finalize()
 
 total_params = visualize_parameters()
 print('Total params: {}'.format(total_params))
@@ -173,7 +196,8 @@ for epoch in range(start_epoch, args.epochs+start_epoch):
         sys.stdout.write('complete!\r\n')
         sys.stdout.flush()
 
-    # sess.run(global_epoch.assign(epoch+1))
+    # keep track of current epoch
+    sess.run(global_epoch.assign(epoch+1))
 
     # tensorboard
     if summary_node is not None:
