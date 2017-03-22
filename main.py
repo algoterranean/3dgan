@@ -60,19 +60,20 @@ with tf.variable_scope('global_vars'):
 # x_input is the tensor for our actual data
 # x is the tensor to be passed to the model (that is, after processing of actual data)
 # TODO: move this to Dataset class or something. dataset should be self-describing
-if args.dataset == 'mnist':
-    x_input = tf.placeholder("float", [None, 784])
-    x = tf.reshape(x_input, [-1, 28, 28, 1])
-elif args.dataset == 'floorplan':
-    x_input = tf.placeholder("float", [None, 64, 64, 3])
-    x = tf.image.rgb_to_grayscale(x_input) if args.grayscale else x_input
+with tf.variable_scope('inputs'):
+    if args.dataset == 'mnist':
+        x_input = tf.placeholder("float", [None, 784], name='x_input')
+        x = tf.reshape(x_input, [-1, 28, 28, 1], name='x')
+    elif args.dataset == 'floorplan':
+        x_input = tf.placeholder("float", [None, 64, 64, 3], name='x_input')
+        x = tf.image.rgb_to_grayscale(x_input, name='x') if args.grayscale else tf.identity(x_input, name='x')
 
-
-# model    
-if args.model == 'fc':
-    y_hat, model_summary_nodes = simple_fc(x, args.layers)
-elif args.model == 'cnn':
-    y_hat, model_summary_nodes = simple_cnn(x, args.layers)
+with tf.variable_scope('outputs'):
+    # model    
+    if args.model == 'fc':
+        y_hat, model_summary_nodes = simple_fc(x, args.layers)
+    elif args.model == 'cnn':
+        y_hat, model_summary_nodes = simple_cnn(x, args.layers)
 
 
 # loss
@@ -236,6 +237,9 @@ for epoch in range(start_epoch, args.epochs+start_epoch):
 
     
 # training completed!
+print('Training completed')
+
+
 
 # save complete montage
 cv2.imwrite(os.path.join(args.dir, 'images', 'montage.png'), montage)

@@ -85,3 +85,7 @@ def debug(*args):
         print(BOLD + OKBLUE + str(args[0]), *(args[1:]), ENDC)
     else:
         print(BOLD + OKBLUE + str(args[0]), ENDC)
+
+
+# def visualize_layer():
+    
