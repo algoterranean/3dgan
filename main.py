@@ -1,7 +1,7 @@
 import tensorflow as tf, numpy as np, matplotlib.pyplot as plt
 import sys, random, argparse, os, uuid, pickle, h5py, cv2, time
 # from models import test
-from models import simple_fc, simple_cnn
+from models import simple_fc, simple_cnn, chen_cnn
 from msssim import MultiScaleSSIM, tf_ssim, tf_ms_ssim
 from data import Floorplans
 from util import *
@@ -74,6 +74,8 @@ with tf.variable_scope('outputs'):
         y_hat, model_summary_nodes = simple_fc(x, args.layers)
     elif args.model == 'cnn':
         y_hat, model_summary_nodes = simple_cnn(x, args.layers)
+    elif args.model == 'chencnn':
+        y_hat, model_summary_nodes = chen_cnn(x)
 
 
 # loss
