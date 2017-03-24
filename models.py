@@ -119,6 +119,7 @@ def _chen_downconv_layer(x, num_filters, ksize, stride, name):
     l = tf.add(tf.nn.conv2d(x, K, strides=[1, stride, stride, 1], padding='SAME'), b)
     l = tf.contrib.layers.batch_norm(l)
     l = tf.nn.relu(l, name=name)
+    tf.add_to_collection('layers', l)
     return l
 
 def _chen_upconv_layer(x, num_filters, ksize, stride, name):
@@ -130,8 +131,9 @@ def _chen_upconv_layer(x, num_filters, ksize, stride, name):
     l = tf.add(tf.nn.conv2d_transpose(x, K, output_shape=out_shape, strides=[1, stride, stride, 1], padding='SAME'), b)
     l = tf.add(l, tf.Variable(tf.zeros([K.get_shape().as_list()[2]])))
     l = tf.nn.relu(l, name=name)
+    tf.add_to_collection('layers', l)
     return l
-                    
+
 
 
 def chen_cnn(x):
@@ -145,44 +147,33 @@ def chen_cnn(x):
     # encoder
     with tf.variable_scope('encoder'):
         x = _chen_downconv_layer(x, 64, 5, 2, 'Layer.Encoder.64')
-        tf.add_to_collection('layers', x)
         summary_nodes.append(tf.summary.histogram('Encoder 64', x))
         x = _chen_downconv_layer(x, 128, 5, 2, 'Layer.Encoder.128')
-        tf.add_to_collection('layers', x)
         summary_nodes.append(tf.summary.histogram('Encoder 128', x))
         x = _chen_downconv_layer(x, 256, 5, 2, 'Layer.Encoder.256')
-        tf.add_to_collection('layers', x)
         summary_nodes.append(tf.summary.histogram('Encoder 256', x))
         x = _chen_downconv_layer(x, 256, 5, 2, 'Layer.Encoder.256x2')
-        tf.add_to_collection('layers', x)
         summary_nodes.append(tf.summary.histogram('Encoder 256x2', x))
         x = _chen_downconv_layer(x, 96, 1, 1, 'Layer.Encoder.96')
-        tf.add_to_collection('layers', x)
         summary_nodes.append(tf.summary.histogram('Encoder 96', x))        
         x = _chen_downconv_layer(x, 32, 1, 1, 'Layer.Encoder.32')
-        tf.add_to_collection('layers', x)
         summary_nodes.append(tf.summary.histogram('Encoder 32', x))
 
     # decoder
     with tf.variable_scope('decoder'):
         x = _chen_downconv_layer(x, 96, 1, 1, 'Layer.Decoder.96')
-        tf.add_to_collection('layers', x)
         summary_nodes.append(tf.summary.histogram('Decoder 96', x))        
         x = _chen_downconv_layer(x, 256, 1, 1, 'Layer.Decoder.256')
-        tf.add_to_collection('layers', x)
         summary_nodes.append(tf.summary.histogram('Decoder 256', x))                
         x = _chen_upconv_layer(x, 256, 5, 2, 'Layer.Decoder.256x2')
-        tf.add_to_collection('layers', x)
         summary_nodes.append(tf.summary.histogram('Decoder 256x2', x))                
         x = _chen_upconv_layer(x, 128, 5, 2, 'Layer.Decoder.128')
-        tf.add_to_collection('layers', x)
         summary_nodes.append(tf.summary.histogram('Decoder 128', x))                
         x = _chen_upconv_layer(x, 64, 5, 2, 'Layer.Decoder.64')
-        tf.add_to_collection('layers', x)
         summary_nodes.append(tf.summary.histogram('Decoder 64', x))                
         # output
         x = _chen_upconv_layer(x, 3, 5, 2, 'Layer.Decoder.3')
-        tf.add_to_collection('layers', x)
         summary_nodes.append(tf.summary.histogram('Decoder 3', x))                
 
     return x, tf.summary.merge(summary_nodes)
+
