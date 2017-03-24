@@ -31,8 +31,17 @@ graph = tf.get_default_graph()
 # print(layer, layer.shape)
 
 
+def get_layer(name):
+    op = graph.as_graph_element(name)
+    if op is not None:
+        return op.outputs[0]
+    else:
+        return None
+
+
 # visualize activations for a particular input
 def visualize_activations(layer, input):
+    input = np.expand_dims(input, 0) # put into batch form for sess.run
     x_input = graph.as_graph_element('inputs/x_input').outputs[0]
     activations = sess.run(layer, feed_dict={x_input: input})
 
@@ -55,8 +64,8 @@ def visualize_activations(layer, input):
     return np.vstack([np.hstack(row) for row in montage])
 
 data = get_dataset('floorplan')
-layer = graph.as_graph_element('outputs/encoder/Layer.Encoder.64').outputs[0]
-result = visualize_activations(layer, np.expand_dims(data.test.images[0], 0))
+layer = get_layer('outputs/encoder/Layer.Encoder.64')
+result = visualize_activations(layer, data.test.images[0])
 print(type(result), result.shape)
 cv2.imwrite('result.png', result)
 
