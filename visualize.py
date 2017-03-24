@@ -39,7 +39,6 @@ def visualize_activations(layer, input):
     num_filters = activations.shape[-1]
     montage_w = ceil(sqrt(num_filters))
     montage_h = int(num_filters/montage_w)
-    # print('dimensions:', montage_w, montage_h)
     
     montage = []
     row_pos = 0
@@ -51,13 +50,9 @@ def visualize_activations(layer, input):
         else:
             montage[-1].append(f)
         row_pos += 1
-    montage_image = None
-    for row in montage:
-        if montage_image is None:
-            montage_image = np.hstack(row)
-        else:
-            montage_image = np.vstack((montage_image, np.hstack(row)))
-    return montage_image
+        
+    # create nxn montage image
+    return np.vstack([np.hstack(row) for row in montage])
 
 data = get_dataset('floorplan')
 layer = graph.as_graph_element('outputs/encoder/Layer.Encoder.64').outputs[0]
