@@ -59,15 +59,33 @@ def visualize_activations(layer, input):
         else:
             montage[-1].append(f)
         row_pos += 1
-        
-    # create nxn montage image
+
+    # fill in any remaining missing images in square montage
+    remaining = montage_w - (num_filters - montage_w * montage_h)
+    if remaining < montage_w:
+        dummy_shape = np.expand_dims(activations[0,:,:,0], 2).shape
+        for _ in range(remaining):
+            montage[-1].append(np.zeros(dummy_shape))
     return np.vstack([np.hstack(row) for row in montage])
 
+
+def visualize_all_activations(layers, input):
+    results = []
+    for layer in layers:
+        print('Visualizing activations on', layer)
+        results.append(visualize_activations(layer, input))
+        # results = [visualize_activations(layer, input) for layer in layers]
+    return results
+
+
 data = get_dataset('floorplan')
-layer = get_layer('outputs/encoder/Layer.Encoder.64')
-result = visualize_activations(layer, data.test.images[0])
-print(type(result), result.shape)
-cv2.imwrite('result.png', result)
+layers = tf.get_collection(key='layers')
+results = visualize_all_activations(layers, data.test.images[0])
+for i in range(len(results)):
+    cv2.imwrite('result_layer_' + str(i) + '.png', results[i])
+
+
+
 
 
 
