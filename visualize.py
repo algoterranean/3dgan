@@ -39,6 +39,8 @@ def get_layer(name):
         return None
 
 
+
+
 # visualize activations for a particular input
 def visualize_activations(layer, input):
     input = np.expand_dims(input, 0) # put into batch form for sess.run
@@ -48,6 +50,8 @@ def visualize_activations(layer, input):
     num_filters = activations.shape[-1]
     montage_w = ceil(sqrt(num_filters))
     montage_h = int(num_filters/montage_w)
+
+    
     
     montage = []
     row_pos = 0
@@ -78,24 +82,81 @@ def visualize_all_activations(layers, input):
     return results
 
 
-data = get_dataset('floorplan')
-layers = tf.get_collection(key='layers')
-results = visualize_all_activations(layers, data.test.images[0])
-for i in range(len(results)):
-    cv2.imwrite('result_layer_' + str(i) + '.png', results[i])
+# data = get_dataset('floorplan')
+# layers = tf.get_collection(key='layers')
+# results = visualize_all_activations(layers, data.test.images[0])
+# for i in range(len(results)):
+#     cv2.imwrite('result_layer_' + str(i) + '.png', results[i])
 
 
 
 
 
+# visualize trained weights
+for v in tf.trainable_variables():
+    print(v)
+w1_name = 'outputs/encoder/Variable/read:0'
+w2_name = 'outputs/encoder/Variable_2/read:0'
+w3_name = 'outputs/encoder/Variable_4/read:0'
+w4_name = 'outputs/decoder/Variable_13/read:0'
+
+# TODO if the num_filters is not 3, visualize each filter separately.
+# if it's 3, visualize as RGB
+def visualize_weights(weight_name):
+    var = graph.as_graph_element(weight_name)
+    weights = sess.run(var)
+    
+    rgb = weights.shape[-2] == 3
+    num_filters = weights.shape[-1] if rgb else weights.shape[-1] * weights.shape[-2]
+    montage_w = ceil(sqrt(num_filters))
+    montage_h = int(num_filters/montage_w)
 
 
-# # visualize trained weights
-# # for v in tf.trainable_variables():
-# #     print(v)
-# w1_name = 'outputs/encoder/Variable/read:0'
-# w2_name = 'outputs/encoder/Variable_2/read:0'
-# w3_name = 'outputs/encoder/Variable_4/read:0'
+    montage = []
+    row_pos = 0
+    for f_idx in range(weights.shape[-1]):
+        # rgb
+        if rgb:
+            f = weights[:,:,:,f_idx] * 255.0
+            if row_pos % montage_w == 0:
+                montage.append([f])
+            else:
+                montage[-1].append(f)
+            row_pos += 1
+        # do each filter channel individually as grayscale
+        else:
+            for f2_idx in range(weights.shape[-2]):
+                f = weights[:,:,f2_idx,f_idx] * 255.0
+                f = np.expand_dims(f, 2)
+                if row_pos % montage_w == 0:
+                    montage.append([f])
+                else:
+                    montage[-1].append(f)
+                row_pos += 1
+
+        
+    # fill in any remaining missing images in square montage
+    remaining = montage_w - (num_filters - montage_w * montage_h)
+    if remaining < montage_w:
+        if rgb:
+            dummy_shape = weights[:,:,:,0].shape
+        else:
+            dummy_shape = np.expand_dims(weights[:,:,0,0], 2).shape
+        for _ in range(remaining):
+            montage[-1].append(np.zeros(dummy_shape))
+
+    for row in montage:
+        print('row')
+        for a in row:
+            print(a.shape)
+    return np.vstack([np.hstack(row) for row in montage])
+
+print('Weights:', graph.as_graph_element(w2_name))
+results = visualize_weights(w2_name)
+print('results image shape:', results.shape)
+# cv2.imwrite('weights_new.png', results)
+    
+
 # w1 = graph.as_graph_element(w1_name)
 # w_value = sess.run(w1)
 # montage = None
