@@ -93,30 +93,12 @@ def visualize_all_activations(layers, input):
 
 
 # visualize trained weights
-
-
-# for v in weight_vars:
-#     print(v)
-# print(weight_vars)
-# weight_vars = []
-# for v in tf.trainable_variables():
-#     if len(v.get_shape()) == 4:
-#         print(v)
-# w1_name = 'outputs/encoder/Variable/read:0'
-# w2_name = 'outputs/encoder/Variable_2/read:0'
-# w3_name = 'outputs/encoder/Variable_4/read:0'
-# w4_name = 'outputs/decoder/Variable_13/read:0'
-
-
 def visualize_weights(var):
-    # var = graph.as_graph_element(weight_name)
     weights = sess.run(var)
-    
-    rgb = weights.shape[-2] == 3
+    rgb = weights.shape[-2] == 3 # should output be rgb or grayscale?
     num_filters = weights.shape[-1] if rgb else weights.shape[-1] * weights.shape[-2]
     montage_w = ceil(sqrt(num_filters))
     montage_h = int(num_filters/montage_w)
-
 
     montage = []
     row_pos = 0
@@ -140,21 +122,13 @@ def visualize_weights(var):
                     montage[-1].append(f)
                 row_pos += 1
 
-        
     # fill in any remaining missing images in square montage
     remaining = montage_w - (num_filters - montage_w * montage_h)
     if remaining < montage_w:
-        if rgb:
-            dummy_shape = weights[:,:,:,0].shape
-        else:
-            dummy_shape = np.expand_dims(weights[:,:,0,0], 2).shape
+        dummy_shape = weights[:,:,:,0].shape if rgb else np.expand_dims(weights[:,:,0,0], 2).shape
         for _ in range(remaining):
             montage[-1].append(np.zeros(dummy_shape))
 
-    # for row in montage:
-    #     print('row')
-    #     for a in row:
-    #         print(a.shape)
     return np.vstack([np.hstack(row) for row in montage])
 
 
@@ -166,33 +140,17 @@ def visualize_all_weights(weights):
     return results
 
 
-weight_vars = [v for v in tf.trainable_variables() if len(v.get_shape()) == 4]
-results = visualize_all_weights(weight_vars)
-for i in range(len(results)):
-    cv2.imwrite('weights_' + str(i) + '.png', results[i])
+# weight_vars = [v for v in tf.trainable_variables() if len(v.get_shape()) == 4]
+# results = visualize_all_weights(weight_vars)
+# for i in range(len(results)):
+#     cv2.imwrite('weights_' + str(i) + '.png', results[i])
 
 
-# print('Weights:', graph.as_graph_element(w2_name))
-# results = visualize_weights(w2_name)
-# print('results image shape:', results.shape)
-# # cv2.imwrite('weights_new.png', results)
+
 
 
 
     
-
-# w1 = graph.as_graph_element(w1_name)
-# w_value = sess.run(w1)
-# montage = None
-# for i in range(w_value.shape[-1]):
-#     f1 = w_value[:,:,:,i] * 255.0
-#     print(f1.shape)
-#     if montage is None:
-#         montage = f1
-#     else:
-#         montage = np.hstack((montage, f1))
-# cv2.imwrite('weights.png', montage)
-
 
 
 
