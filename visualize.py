@@ -93,17 +93,23 @@ def visualize_all_activations(layers, input):
 
 
 # visualize trained weights
-for v in tf.trainable_variables():
-    print(v)
-w1_name = 'outputs/encoder/Variable/read:0'
-w2_name = 'outputs/encoder/Variable_2/read:0'
-w3_name = 'outputs/encoder/Variable_4/read:0'
-w4_name = 'outputs/decoder/Variable_13/read:0'
 
-# TODO if the num_filters is not 3, visualize each filter separately.
-# if it's 3, visualize as RGB
-def visualize_weights(weight_name):
-    var = graph.as_graph_element(weight_name)
+
+# for v in weight_vars:
+#     print(v)
+# print(weight_vars)
+# weight_vars = []
+# for v in tf.trainable_variables():
+#     if len(v.get_shape()) == 4:
+#         print(v)
+# w1_name = 'outputs/encoder/Variable/read:0'
+# w2_name = 'outputs/encoder/Variable_2/read:0'
+# w3_name = 'outputs/encoder/Variable_4/read:0'
+# w4_name = 'outputs/decoder/Variable_13/read:0'
+
+
+def visualize_weights(var):
+    # var = graph.as_graph_element(weight_name)
     weights = sess.run(var)
     
     rgb = weights.shape[-2] == 3
@@ -145,16 +151,34 @@ def visualize_weights(weight_name):
         for _ in range(remaining):
             montage[-1].append(np.zeros(dummy_shape))
 
-    for row in montage:
-        print('row')
-        for a in row:
-            print(a.shape)
+    # for row in montage:
+    #     print('row')
+    #     for a in row:
+    #         print(a.shape)
     return np.vstack([np.hstack(row) for row in montage])
 
-print('Weights:', graph.as_graph_element(w2_name))
-results = visualize_weights(w2_name)
-print('results image shape:', results.shape)
-# cv2.imwrite('weights_new.png', results)
+
+def visualize_all_weights(weights):
+    results = []
+    for var in weights:
+        print('Visualizing weights on', var)
+        results.append(visualize_weights(var))
+    return results
+
+
+weight_vars = [v for v in tf.trainable_variables() if len(v.get_shape()) == 4]
+results = visualize_all_weights(weight_vars)
+for i in range(len(results)):
+    cv2.imwrite('weights_' + str(i) + '.png', results[i])
+
+
+# print('Weights:', graph.as_graph_element(w2_name))
+# results = visualize_weights(w2_name)
+# print('results image shape:', results.shape)
+# # cv2.imwrite('weights_new.png', results)
+
+
+
     
 
 # w1 = graph.as_graph_element(w1_name)
