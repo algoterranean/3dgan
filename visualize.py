@@ -10,9 +10,7 @@ from util import *
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--dir', type=str)
-# parser.add_argument('--mode', type=str)
 args = parser.parse_args()
-
 
 sess = tf.Session()
 saver = tf.train.import_meta_graph(os.path.join(args.dir, 'model'))
@@ -39,19 +37,16 @@ def get_layer(name):
         return None
 
 
-
-
 # visualize activations for a particular input
 def visualize_activations(layer, input):
-    input = np.expand_dims(input, 0) # put into batch form for sess.run
+    # input is a single image, so put it into batch form for sess.run
+    input = np.expand_dims(input, 0)
     x_input = graph.as_graph_element('inputs/x_input').outputs[0]
     activations = sess.run(layer, feed_dict={x_input: input})
-
+    # calc size of montage
     num_filters = activations.shape[-1]
     montage_w = ceil(sqrt(num_filters))
     montage_h = int(num_filters/montage_w)
-
-    
     
     montage = []
     row_pos = 0
@@ -74,14 +69,9 @@ def visualize_activations(layer, input):
 
 
 def visualize_all_activations(layers, input):
-    results = []
-    for layer in layers:
-        print('Visualizing activations on', layer)
-        results.append(visualize_activations(layer, input))
-        # results = [visualize_activations(layer, input) for layer in layers]
-    return results
+    return [visualize_activations(layer, input) for layer in layers]
 
-
+# # how to use:
 # data = get_dataset('floorplan')
 # layers = tf.get_collection(key='layers')
 # results = visualize_all_activations(layers, data.test.images[0])
@@ -133,13 +123,9 @@ def visualize_weights(var):
 
 
 def visualize_all_weights(weights):
-    results = []
-    for var in weights:
-        print('Visualizing weights on', var)
-        results.append(visualize_weights(var))
-    return results
+    return [visualize_weights(var) for var in weights]
 
-
+# # how to use:
 # weight_vars = [v for v in tf.trainable_variables() if len(v.get_shape()) == 4]
 # results = visualize_all_weights(weight_vars)
 # for i in range(len(results)):
@@ -151,8 +137,6 @@ def visualize_all_weights(weights):
 
 
     
-
-
 
 
 # # # visualize image that most activates a filter via gradient ascent
