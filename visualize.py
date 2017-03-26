@@ -202,9 +202,9 @@ def visualize_bestfit_image(layer):
             image_list.append(deprocess_image(input_img_data[0]))
             # print('Completed filter {}/{}, {} elapsed'.format(idx, layer.get_shape()[-1], datetime.datetime.now() - dt_f))
             # tf.reset_default_graph()
-
-    print('Finished', layer)
-    print('Elapsed: {}'.format(datetime.datetime.now() - dt))
+            
+    # print('Finished', layer)
+    # print('Elapsed: {}'.format(datetime.datetime.now() - dt))
     return stitch_montage(image_list) #, add_border=True)
     
 
@@ -305,7 +305,9 @@ if __name__ == '__main__':
     ################################################
     # generate images!
 
+    
     # activations
+    # TODO: add timelapse for each checkpoint    
     sess = reload_session(args.dir)
     layers = tf.get_collection('layers')
     for n in range(args.examples):
@@ -319,28 +321,30 @@ if __name__ == '__main__':
 
     # example timelapse
     results = visualize_timelapse(args.dir, example_images)
-    cv2.imwrite(os.path.join(args.dir, 'images', 'montage-test.png'), results)
+    cv2.imwrite(os.path.join(args.dir, 'images', 'timelapse.png'), results)
+    # reset session to most recent checkpoint
+    sess = reload_session(args.dir)
+    
 
-            
+
     # weights
+    # TODO: add timelapse for each checkpoint                
     # note, the only variables we are interested in are the conv weights, which have shape of length 4
     weight_vars = [v for v in tf.trainable_variables() if len(v.get_shape()) == 4]
     results = visualize_all_weights(weight_vars)
     for i in range(len(results)):
         weight_path = os.path.join(args.dir, 'images', 'weights', 'weights_' + str(i) + '.png')
         cv2.imwrite(weight_path, results[i])
-
         
     # best fit via gradient ascent
-    sess = reload_session()
+    sess = reload_session(args.dir)
     layers = tf.get_collection('layers')
     i = 0
-    for i in range(len(layers)):
-        sess = reload_session()
+    for i in range(1):
+    # for i in range(len(layers)):
+        sess = reload_session(args.dir)
         layer = tf.get_collection('layers')[i]
         results = visualize_bestfit_image(layer)
         img_path = os.path.join(args.dir, 'images', 'bestfit', 'bestfit_layer_' + str(i) + '.png')
         cv2.imwrite(img_path, results)
 
-        
-            
