@@ -1,3 +1,4 @@
+# stdlib/external
 import tensorflow as tf
 import numpy as np
 import sys
@@ -9,7 +10,7 @@ import pickle
 import h5py
 import cv2
 import time
-# from models import test
+# local
 from models import simple_fc, simple_cnn, chen_cnn, shared_cnn
 from msssim import MultiScaleSSIM, tf_ssim, tf_ms_ssim
 from data import Floorplans
@@ -211,21 +212,6 @@ for epoch in range(start_epoch, args.epochs+start_epoch):
         print('Epoch {}: Validation loss ({:.5f}), elapsed time {}'.format(epoch, avg_validation_loss, validation_end_time - validation_start_time))
 
 
-        
-    # # generate examples for montage
-    # if args.interactive:
-    #     sys.stdout.write('Generating examples to disk...')
-    # else:
-    #     print('Generating examples to disk...')
-    # row = generate_example_row(data, y_hat, example_images, epoch==1, sess, x_input, args)
-    # imgfile = os.path.join(args.dir, 'images', 'montage_{:03d}.png'.format(epoch))
-    # cv2.imwrite(imgfile, row)
-    # # add this epoch's examples to montage
-    # montage = row if montage is None else np.vstack((montage, row))
-    # if args.interactive:
-    #     sys.stdout.write('complete!\r\n')
-    #     sys.stdout.flush()
-
     # update tensorboard nodes
     if epoch_summary_nodes is not None:
         summary_result = sess.run(epoch_summary_nodes, feed_dict={x_input: example_images})
@@ -254,10 +240,9 @@ for epoch in range(start_epoch, args.epochs+start_epoch):
 print('Training completed')
 
 
-# # save complete montage
-# cv2.imwrite(os.path.join(args.dir, 'images', 'montage.png'), montage)
-    
+
 # perform test
+print('Starting testing')    
 n_testbatches = int(data.test.num_examples/args.batchsize)
 total_test_loss = 0.0
 for i in range(n_testbatches):
@@ -281,17 +266,3 @@ else:
 for key in log_files:
     log_files[key].close()
 
-# # generate charts
-# train_loss = np.genfromtxt(os.path.join(args.dir, "logs", "train_loss.csv"), delimiter=',')
-# test_loss = np.genfromtxt(os.path.join(args.dir, "logs", "test_loss.csv"), delimiter=',')
-# validate_loss = np.genfromtxt(os.path.join(args.dir, "logs", "validate_loss.csv"), delimiter=',')
-# plt.rc('text', usetex=True)
-# plt.rc('font', **{'family':'serif','serif':['Palatino']})
-# for x in [(train_loss, {}), (validate_loss, {'color': 'firebrick'})]:
-#     data, plot_args = x
-#     iters = data[:,[0]]
-#     vals = data[:,[1]]
-#     plt.plot(iters, vals, **plot_args)
-#     plt.xlabel('Iteration')
-#     plt.ylabel(r'$\ell_1$ Loss')
-# plt.savefig(os.path.join(args.dir, "images", "loss.pdf"))

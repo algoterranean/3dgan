@@ -1,3 +1,4 @@
+# stdlib/external
 import tensorflow as tf
 import numpy as np
 import matplotlib.pyplot as plt
@@ -7,7 +8,7 @@ import cv2
 import datetime
 from math import ceil, sqrt
 from itertools import chain
-# 
+# local
 from models import simple_fc, simple_cnn
 from util import *
 
@@ -124,14 +125,6 @@ def visualize_activations(layer, input):
 def visualize_all_activations(layers, input):
     return [visualize_activations(layer, input) for layer in layers]
 
-# # how to use:
-# data = get_dataset('floorplan')
-# layers = tf.get_collection('layers')
-# results = visualize_all_activations(layers, data.test.images[0])
-# for i in range(len(results)):
-#     cv2.imwrite('result_layer_' + str(i) + '.png', results[i])
-
-
 
 # TODO: Given a layer, find the weights
 # visualize trained weights
@@ -154,15 +147,6 @@ def visualize_weights(var):
 
 def visualize_all_weights(weights):
     return [visualize_weights(var) for var in weights]
-
-# # how to use:
-# # note, the only variables we are interested in are the conv weights, which have shape of length 4
-# weight_vars = [v for v in tf.trainable_variables() if len(v.get_shape()) == 4]
-# results = visualize_all_weights(weight_vars)
-# for i in range(len(results)):
-#     print('results', i, results[i].shape)
-#     cv2.imwrite('weights_' + str(i) + '.png', results[i])
-
 
 
 def visualize_timelapse(workspace_dir, example_images):
@@ -187,9 +171,6 @@ def visualize_timelapse(workspace_dir, example_images):
     return stitch_montage(montage, use_width=len(example_images)) #args.examples)
 
 
-
-
-
 # visualize image that most activates a filter via gradient ascent
 def visualize_bestfit_image(layer):
     """Use gradient ascent to find image that best activates a layer's filters."""
@@ -211,20 +192,17 @@ def visualize_bestfit_image(layer):
             # normalize gradients
             grads = grads / (tf.sqrt(tf.reduce_mean(tf.square(grads))) + 1e-5)
 
+            # perform gradient ascent in image space
             for n in range(20):
                 loss_value, grads_value = sess.run([loss, grads], feed_dict={x_input: input_img_data})
                 input_img_data += grads_value                
                 if loss_value <= 0:
                     input_img_data = np.ones([1, 64, 64, 3])
                     break
-
-            # image_list.append(input_img_data[0])
             image_list.append(deprocess_image(input_img_data[0]))
-            # print('Completed filter {}/{}, {} elapsed'.format(idx, layer.get_shape()[-1], datetime.datetime.now() - dt_f))
-            # tf.reset_default_graph()
+
             
-    # print('Finished', layer)
-    # print('Elapsed: {}'.format(datetime.datetime.now() - dt))
+
     return stitch_montage(image_list) #, add_border=True)
     
 
@@ -232,56 +210,6 @@ def visualize_all_bestfit_images(layers):
     return [visualize_bestfit_image(layer) for layer in layers]
 
 
-# sess = reload_session()
-# layers = tf.get_collection('layers')
-# # how to use:
-# i = 0
-# for i in range(len(layers)):
-#     sess = reload_session()
-#     layer = tf.get_collection('layers')[i]
-#     cv2.imwrite('test_{}.png'.format(i), visualize_bestfit_image(layer))
-#     i += 1
-
-    
-# sess = reload_session(args.dir)
-# layer = tf.get_collection('layers')[0]
-# result = visualize_bestfit_image(layer)
-# cv2.imwrite('test.png', result)
-
-
-# layers = tf.get_collection('layers')
-# results = visualize_all_bestfit_images(layers)
-# for i in range(len(results)):
-#     cv2.imwrite('bestfit_' + str(i) + '.png', results[i])
-
-
-    
-# encoder 256: 18.5 min
-# encoder 256x2: 37.43 min
-# encoder 96: 20.5 min
-# encoder 32: 8 min
-# decoder 96: 27min, 11 sec
-# decoder 256: 1hr 41min
-
-# encoder:
-# 64:        37s
-# 128:    2m 48s
-# 256:   11m 50s
-# 256x2: 15m 22s
-# 96:     4m 23s
-
-# feature vec:
-# 32:     1m 18s
-
-# decoder:
-# 96:     5m 46s
-# 256:   37m       (roughly)
-# 256x2: 31m 4s
-# 128:   10m 37s
-# 64:    4m 5s
-# 3:     8s
-
-# total time: about 122m  (2hr)
 
 
 
@@ -326,10 +254,6 @@ if __name__ == '__main__':
     best_path = os.path.join(args.dir, 'images', 'bestfit')
     if not os.path.exists(best_path):
         os.makedirs(best_path)
-    # # timelapse
-    # timelapse_path = os.path.join(args.dir, 'images', 'timelapse')
-    # if not os.path.exists(timelapse_path):
-    #     os.makedirs(timelapse_path)
 
 
     ################################################
