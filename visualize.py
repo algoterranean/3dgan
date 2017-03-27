@@ -392,9 +392,9 @@ if __name__ == '__main__':
         print('Generating best fit images for each filter...') 
         layers = tf.get_collection('layers')
         i = 0
-        for i in range(1):
+        # for i in range(1):
+        for i in range(len(layers)):        
             print('Generating layer', i)
-            # for i in range(len(layers)):
             sess = reload_session(args.dir)
             layer = tf.get_collection('layers')[i]
             results = visualize_bestfit_image(layer)

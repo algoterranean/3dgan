@@ -11,13 +11,12 @@ def generate_example_row(data, tensor, xs, include_actual, sess, x_input, args):
     examples = sess.run(tensor, feed_dict={x_input: xs})
     montage = None
     for i, pred in enumerate(examples):
-
         if include_actual:
             if args.grayscale:
-                input_img = cv2.cvtColor(data.test.images[i], cv2.COLOR_BGR2GRAY)
+                input_img = cv2.cvtColor(xs[i], cv2.COLOR_BGR2GRAY)
                 pred = np.squeeze(pred)
             else:
-                input_img = data.test.images[i]
+                input_img = xs[i] #data.test.images[i] 
             if args.dataset == 'mnist':
                 input_img = np.reshape(input_img, [28, 28, 1])
             # print('pred:', pred.shape, 'input_img:', input_img.shape)
@@ -37,11 +36,11 @@ def print_progress(epoch, completed, total, loss):
 
 
 def get_dataset(name):
-    print('Loading dataset...')
+    # print('Loading dataset...')
     if name == 'mnist':
         from tensorflow.examples.tutorials.mnist import input_data
         return input_data.read_data_sets("data/MNIST_data", one_hot=True)
-    elif name == 'floorplan':
+    elif name == 'floorplans':
         return Floorplans()
 
 
