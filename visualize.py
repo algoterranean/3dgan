@@ -1,5 +1,6 @@
 import tensorflow as tf
 import numpy as np
+import matplotlib.pyplot as plt
 import argparse
 import os
 import cv2
@@ -12,10 +13,8 @@ from util import *
 
 
 
-
-
-
-
+################################################
+# utility/helper functions
 
 def reload_session(dir, fn=None):
     tf.reset_default_graph()
@@ -30,13 +29,26 @@ def reload_session(dir, fn=None):
     return sess
 
 
+# util function to convert a tensor into a valid image
+def deprocess_image(x):
+    # normalize tensor: center on 0., ensure std is 0.1
+    x -= x.mean()
+    x /= (x.std() + 1e-5)
+    x *= 0.1
+    # clip to [0, 1]
+    x += 0.5
+    x = np.clip(x, 0, 1)
+    # convert to RGB array
+    x *= 255
+    x = np.clip(x, 0, 255).astype('uint8')
+    return x
+
 
 # usage: list(chunks(some_list, chunk_size)) ==> list of lists of that size
 def chunks(l, n):
     """Yield successive n-sized chunks from l."""
     for i in range(0, len(l), n):
         yield l[i:i + n]
-
 
 
 # TODO: Add option to use color for a border
@@ -67,6 +79,30 @@ def stitch_montage(image_list, add_border=True, use_width=0):
         return np.concatenate(list(chain(*zip(c, [np.concatenate(list(chain(*zip(b, row))) + [v_border], axis=1) for row in montage]))) + [h_border], axis=0)
     else:
         return np.concatenate([np.concatenate(row, axis=1) for row in montage], axis=0)
+
+    
+
+################################################
+# visualization functions
+
+
+def visualize_loss(dir):
+    log_dir = os.path.join(dir, 'logs')
+    train_loss_csv = np.genfromtxt(os.path.join(log_dir, 'train_loss.csv'), delimiter=',')
+    test_loss_csv = np.genfromtxt(os.path.join(log_dir, 'test_loss.csv'), delimiter=',')
+    validate_loss_csv = np.genfromtxt(os.path.join(log_dir, 'validate_loss.csv'), delimiter=',')
+    plt.rc('text', usetex=True)
+    plt.rc('font', **{'family':'serif','serif':['Palatino']})
+    for x in [(train_loss_csv, {}), (validate_loss_csv, {'color': 'firebrick'})]:
+        data, plot_args = x
+        iters = data[:,[0]]
+        vals = data[:,[1]]
+        plt.plot(iters, vals, **plot_args)
+    plt.xlabel('Iteration')
+    plt.ylabel(r'$\ell_1$ Loss')
+    plt.savefig(os.path.join(dir, 'images', 'loss.pdf'))
+    plt.close()
+    
     
 
 # TODO: Add option for x_input, or find it dynamically
@@ -152,22 +188,6 @@ def visualize_timelapse(workspace_dir, example_images):
 
 
 
-# util function to convert a tensor into a valid image
-def deprocess_image(x):
-    # normalize tensor: center on 0., ensure std is 0.1
-    x -= x.mean()
-    x /= (x.std() + 1e-5)
-    x *= 0.1
-
-    # clip to [0, 1]
-    x += 0.5
-    x = np.clip(x, 0, 1)
-
-    # convert to RGB array
-    x *= 255
-    # x = x.transpose((1, 2, 0))
-    x = np.clip(x, 0, 255).astype('uint8')
-    return x
 
 
 # visualize image that most activates a filter via gradient ascent
@@ -265,16 +285,26 @@ def visualize_all_bestfit_images(layers):
 
 
 
+# TODO: add support for visualizing both test and training data examples for comparison
 if __name__ == '__main__':
+    ################################################    
+    # parse args
+    
     parser = argparse.ArgumentParser()
     parser.add_argument('--dir', type=str)
-    parser.add_argument('--data', type=str)
-    parser.add_argument('--examples', type=int)
+    parser.add_argument('--data', type=str, default='mnist')
+    parser.add_argument('--examples', type=int, default=10)
+    parser.add_argument('--all', default=False, action='store_true')
+    parser.add_argument('--loss', default=False, action='store_true')
+    parser.add_argument('--activations', default=False, action='store_true')
+    parser.add_argument('--timelapse', default=False, action='store_true')
+    parser.add_argument('--weights', default=False, action='store_true')
+    parser.add_argument('--bestfit', default=False, action='store_true')
     args = parser.parse_args()
 
-    data = get_dataset(args.data)
-    sample_indexes = np.random.choice(data.test.images.shape[0], args.examples, replace=False)
-    example_images = data.test.images[sample_indexes, :]
+
+
+
 
     ################################################    
     # prep dirs
@@ -296,55 +326,79 @@ if __name__ == '__main__':
     best_path = os.path.join(args.dir, 'images', 'bestfit')
     if not os.path.exists(best_path):
         os.makedirs(best_path)
-    # timelapse
-    timelapse_path = os.path.join(args.dir, 'images', 'timelapse')
-    if not os.path.exists(timelapse_path):
-        os.makedirs(timelapse_path)
+    # # timelapse
+    # timelapse_path = os.path.join(args.dir, 'images', 'timelapse')
+    # if not os.path.exists(timelapse_path):
+    #     os.makedirs(timelapse_path)
 
 
     ################################################
-    # generate images!
+    # generate visualizations!
 
+    # plot loss
+    # note: needs to be done before loading dataset or model or it crashes (OOM)
+    # don't know why
+    if args.loss or args.all:
+        print('Plotting loss...')
+        visualize_loss(args.dir)        
+    
+    # load data, model, and checkpoint
+    # TODO add code to get_dataset to support not loading the entire dataset unless we need to
+    print('Loading dataset...')
+    data = get_dataset(args.data)
+    sample_indexes = np.random.choice(data.test.images.shape[0], args.examples, replace=False)
+    example_images = data.test.images[sample_indexes, :]
+    print('Loading model and checkpoint..')
+    sess = reload_session(args.dir)
+    
     
     # activations
-    # TODO: add timelapse for each checkpoint    
-    sess = reload_session(args.dir)
-    layers = tf.get_collection('layers')
-    for n in range(args.examples):
-        example = example_images[n]
-        example_path = os.path.join(args.dir, 'images', 'activations', 'example' + str(n))
-        results = visualize_all_activations(layers, example)
-        for i in range(len(results)):
-            image_path = os.path.join(example_path, 'activation_layer_' + str(i) + '.png')
-            cv2.imwrite(image_path, results[i])
+    # TODO: add timelapse for each checkpoint
+    if args.activations or args.all:
+        print('Generating activations visualization...')
+        layers = tf.get_collection('layers')
+        for n in range(args.examples):
+            example = example_images[n]
+            example_path = os.path.join(args.dir, 'images', 'activations', 'example' + str(n))
+            results = visualize_all_activations(layers, example)
+            for i in range(len(results)):
+                image_path = os.path.join(example_path, 'activation_layer_' + str(i) + '.png')
+                cv2.imwrite(image_path, results[i])
 
 
     # example timelapse
-    results = visualize_timelapse(args.dir, example_images)
-    cv2.imwrite(os.path.join(args.dir, 'images', 'timelapse.png'), results)
-    # reset session to most recent checkpoint
-    sess = reload_session(args.dir)
-    
+    if args.timelapse or args.all:
+        print('Generating timelapse...')
+        results = visualize_timelapse(args.dir, example_images)
+        cv2.imwrite(os.path.join(args.dir, 'images', 'timelapse.png'), results)
+        # reset session to most recent checkpoint
+        sess = reload_session(args.dir)
 
 
     # weights
     # TODO: add timelapse for each checkpoint                
     # note, the only variables we are interested in are the conv weights, which have shape of length 4
-    weight_vars = [v for v in tf.trainable_variables() if len(v.get_shape()) == 4]
-    results = visualize_all_weights(weight_vars)
-    for i in range(len(results)):
-        weight_path = os.path.join(args.dir, 'images', 'weights', 'weights_' + str(i) + '.png')
-        cv2.imwrite(weight_path, results[i])
+    if args.weights or args.all:
+        print('Generating weights visualization...')
+        weight_vars = [v for v in tf.trainable_variables() if len(v.get_shape()) == 4]
+        results = visualize_all_weights(weight_vars)
+        for i in range(len(results)):
+            weight_path = os.path.join(args.dir, 'images', 'weights', 'weights_' + str(i) + '.png')
+            cv2.imwrite(weight_path, results[i])
+
         
     # best fit via gradient ascent
-    sess = reload_session(args.dir)
-    layers = tf.get_collection('layers')
-    i = 0
-    for i in range(1):
-    # for i in range(len(layers)):
-        sess = reload_session(args.dir)
-        layer = tf.get_collection('layers')[i]
-        results = visualize_bestfit_image(layer)
-        img_path = os.path.join(args.dir, 'images', 'bestfit', 'bestfit_layer_' + str(i) + '.png')
-        cv2.imwrite(img_path, results)
+    if args.bestfit or args.all:
+        print('Generating best fit images for each filter...') 
+        layers = tf.get_collection('layers')
+        i = 0
+        for i in range(1):
+            print('Generating layer', i)
+            # for i in range(len(layers)):
+            sess = reload_session(args.dir)
+            layer = tf.get_collection('layers')[i]
+            results = visualize_bestfit_image(layer)
+            img_path = os.path.join(args.dir, 'images', 'bestfit', 'bestfit_layer_' + str(i) + '.png')
+            cv2.imwrite(img_path, results)
 
+        
