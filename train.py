@@ -18,6 +18,10 @@ from util import *
 
 
 
+# TODO move this stuff to functions
+
+
+
 # command line arguments
 parser = argparse.ArgumentParser()
 parser.add_argument('--epochs', type=int, default=3)
@@ -162,7 +166,6 @@ data = get_dataset(args.dataset)
 sample_indexes = np.random.choice(data.test.images.shape[0], args.examples, replace=False)
 print('Using example images', sample_indexes)
 example_images = data.test.images[sample_indexes, :]
-
 
 # training!
 print('Starting training')

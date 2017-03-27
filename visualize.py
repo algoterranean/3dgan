@@ -215,6 +215,7 @@ def visualize_all_bestfit_images(layers):
 
 # TODO: add support for visualizing both test and training data examples for comparison
 if __name__ == '__main__':
+    
     ################################################    
     # parse args
     
@@ -231,9 +232,6 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
 
-
-
-
     ################################################    
     # prep dirs
     
@@ -246,22 +244,20 @@ if __name__ == '__main__':
             os.makedirs(example_path)
         image_path = os.path.join(example_path, 'original_' + str(sample_num) + '.png')
         cv2.imwrite(image_path, example * 255.0)
-    # weights
-    weight_path = os.path.join(args.dir, 'images', 'weights')
-    if not os.path.exists(weight_path):
-        os.makedirs(weight_path)
-    # best fit
-    best_path = os.path.join(args.dir, 'images', 'bestfit')
-    if not os.path.exists(best_path):
-        os.makedirs(best_path)
+        
+    # weights and bestfit
+    for d in ['weights', 'bestfit']:
+        p = os.path.join(args.dir, 'images', d)
+        if not os.path.exists(p):
+            os.makedirs(p)
 
 
     ################################################
     # generate visualizations!
 
     # plot loss
-    # note: needs to be done before loading dataset or model or it crashes (OOM)
-    # don't know why
+    # note: needs to be done before loading dataset or model or it crashes (OOM).
+    # don't know why...
     if args.loss or args.all:
         print('Plotting loss...')
         visualize_loss(args.dir)        
