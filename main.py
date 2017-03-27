@@ -1,7 +1,16 @@
-import tensorflow as tf, numpy as np, matplotlib.pyplot as plt
-import sys, random, argparse, os, uuid, pickle, h5py, cv2, time
+import tensorflow as tf
+import numpy as np
+import sys
+import random
+import argparse
+import os
+import uuid
+import pickle
+import h5py
+import cv2
+import time
 # from models import test
-from models import simple_fc, simple_cnn, chen_cnn
+from models import simple_fc, simple_cnn, chen_cnn, shared_cnn
 from msssim import MultiScaleSSIM, tf_ssim, tf_ms_ssim
 from data import Floorplans
 from util import *
@@ -64,7 +73,7 @@ with tf.variable_scope('inputs'):
     if args.dataset == 'mnist':
         x_input = tf.placeholder("float", [None, 784], name='x_input')
         x = tf.reshape(x_input, [-1, 28, 28, 1], name='x')
-    elif args.dataset == 'floorplan':
+     elif args.dataset == 'floorplans':
         x_input = tf.placeholder("float", [None, 64, 64, 3], name='x_input')
         x = tf.image.rgb_to_grayscale(x_input, name='x') if args.grayscale else tf.identity(x_input, name='x')
 
@@ -76,6 +85,8 @@ with tf.variable_scope('outputs'):
         y_hat, model_summary_nodes = simple_cnn(x, args.layers)
     elif args.model == 'chencnn':
         y_hat, model_summary_nodes = chen_cnn(x)
+    elif args.model == 'sharedcnn':
+        y_hat, model_summary_nodes = shared_cnn(x)
 
 
 # loss
@@ -111,7 +122,7 @@ log_files = prep_workspace(args.dir)
 
 
 # session saving/loading
-saver = tf.train.Saver()
+saver = tf.train.Saver(max_to_keep=None)
 if not args.resume:
     pickle.dump(args, open(os.path.join(args.dir, 'settings'), 'wb'))
     tf.train.export_meta_graph(os.path.join(args.dir, 'model'))
@@ -146,8 +157,9 @@ print('Total params: {}'.format(total_params))
 
 # dataset
 data = get_dataset(args.dataset)
-# example data for visualizing results/progress
+# # example data for visualizing results/progress
 sample_indexes = np.random.choice(data.test.images.shape[0], args.examples, replace=False)
+print('Using example images', sample_indexes)
 example_images = data.test.images[sample_indexes, :]
 
 
@@ -157,7 +169,7 @@ start_epoch = sess.run(global_epoch) + 1
 n_trbatches = int(data.train.num_examples/args.batchsize)
 iterations_completed = sess.run(global_step) * args.batchsize
 
-
+# for each epoch...
 for epoch in range(start_epoch, args.epochs+start_epoch):
     epoch_start_time = time.time()
     training_start_time = time.time()
@@ -200,19 +212,19 @@ for epoch in range(start_epoch, args.epochs+start_epoch):
 
 
         
-    # generate examples for montage
-    if args.interactive:
-        sys.stdout.write('Generating examples to disk...')
-    else:
-        print('Generating examples to disk...')
-    row = generate_example_row(data, y_hat, example_images, epoch==1, sess, x_input, args)
-    imgfile = os.path.join(args.dir, 'images', 'montage_{:03d}.png'.format(epoch))
-    cv2.imwrite(imgfile, row)
-    # add this epoch's examples to montage
-    montage = row if montage is None else np.vstack((montage, row))
-    if args.interactive:
-        sys.stdout.write('complete!\r\n')
-        sys.stdout.flush()
+    # # generate examples for montage
+    # if args.interactive:
+    #     sys.stdout.write('Generating examples to disk...')
+    # else:
+    #     print('Generating examples to disk...')
+    # row = generate_example_row(data, y_hat, example_images, epoch==1, sess, x_input, args)
+    # imgfile = os.path.join(args.dir, 'images', 'montage_{:03d}.png'.format(epoch))
+    # cv2.imwrite(imgfile, row)
+    # # add this epoch's examples to montage
+    # montage = row if montage is None else np.vstack((montage, row))
+    # if args.interactive:
+    #     sys.stdout.write('complete!\r\n')
+    #     sys.stdout.flush()
 
     # update tensorboard nodes
     if epoch_summary_nodes is not None:
@@ -242,9 +254,8 @@ for epoch in range(start_epoch, args.epochs+start_epoch):
 print('Training completed')
 
 
-
-# save complete montage
-cv2.imwrite(os.path.join(args.dir, 'images', 'montage.png'), montage)
+# # save complete montage
+# cv2.imwrite(os.path.join(args.dir, 'images', 'montage.png'), montage)
     
 # perform test
 n_testbatches = int(data.test.num_examples/args.batchsize)
@@ -270,17 +281,17 @@ else:
 for key in log_files:
     log_files[key].close()
 
-# generate charts
-train_loss = np.genfromtxt(os.path.join(args.dir, "logs", "train_loss.csv"), delimiter=',')
-test_loss = np.genfromtxt(os.path.join(args.dir, "logs", "test_loss.csv"), delimiter=',')
-validate_loss = np.genfromtxt(os.path.join(args.dir, "logs", "validate_loss.csv"), delimiter=',')
-plt.rc('text', usetex=True)
-plt.rc('font', **{'family':'serif','serif':['Palatino']})
-for x in [(train_loss, {}), (validate_loss, {'color': 'firebrick'})]:
-    data, plot_args = x
-    iters = data[:,[0]]
-    vals = data[:,[1]]
-    plt.plot(iters, vals, **plot_args)
-    plt.xlabel('Iteration')
-    plt.ylabel(r'$\ell_1$ Loss')
-plt.savefig(os.path.join(args.dir, "images", "loss.pdf"))
+# # generate charts
+# train_loss = np.genfromtxt(os.path.join(args.dir, "logs", "train_loss.csv"), delimiter=',')
+# test_loss = np.genfromtxt(os.path.join(args.dir, "logs", "test_loss.csv"), delimiter=',')
+# validate_loss = np.genfromtxt(os.path.join(args.dir, "logs", "validate_loss.csv"), delimiter=',')
+# plt.rc('text', usetex=True)
+# plt.rc('font', **{'family':'serif','serif':['Palatino']})
+# for x in [(train_loss, {}), (validate_loss, {'color': 'firebrick'})]:
+#     data, plot_args = x
+#     iters = data[:,[0]]
+#     vals = data[:,[1]]
+#     plt.plot(iters, vals, **plot_args)
+#     plt.xlabel('Iteration')
+#     plt.ylabel(r'$\ell_1$ Loss')
+# plt.savefig(os.path.join(args.dir, "images", "loss.pdf"))
