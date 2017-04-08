@@ -11,7 +11,11 @@ import h5py
 import cv2
 import time
 # local
-from models import simple_fc, simple_cnn, chen_cnn, shared_cnn
+from models.fc import simple_fc
+from models.conv import simple_cnn
+from models.chen import chen_cnn
+from models.shared_cnn import shared_cnn
+# from models import fc.simple_fc, simple_cnn, chen_cnn, shared_cnn
 from msssim import MultiScaleSSIM, tf_ssim, tf_ms_ssim
 from data import Floorplans
 from util import *
@@ -19,7 +23,7 @@ from util import *
 
 
 # TODO move this stuff to functions
-
+# TODO add interactive back in as the default, but write a summary to disk for later review (in case terminal session is lost)
 
 
 # command line arguments
@@ -78,9 +82,11 @@ with tf.variable_scope('inputs'):
     if args.dataset == 'mnist':
         x_input = tf.placeholder("float", [None, 784], name='x_input')
         x = tf.reshape(x_input, [-1, 28, 28, 1], name='x')
-     elif args.dataset == 'floorplans':
+        x = x - tf.reduce_mean(x)
+    elif args.dataset == 'floorplans':
         x_input = tf.placeholder("float", [None, 64, 64, 3], name='x_input')
         x = tf.image.rgb_to_grayscale(x_input, name='x') if args.grayscale else tf.identity(x_input, name='x')
+        x = x - tf.reduce_mean(x)
 
 with tf.variable_scope('outputs'):
     # model    
@@ -99,6 +105,7 @@ with tf.variable_scope('loss_functions'):
     loss_functions = {'l1': tf.reduce_mean(tf.abs(x - y_hat)),
                       'l2': tf.reduce_mean(tf.pow(x - y_hat, 2)),
                       'rmse': tf.sqrt(tf.reduce_mean(tf.pow(x - y_hat, 2))),
+                      'mse': tf.reduce_mean(tf.pow(x - y_hat, 2)),
                       'ssim': 1.0 - tf_ssim(tf.image.rgb_to_grayscale(x), tf.image.rgb_to_grayscale(y_hat)),
                       'crossentropy': -tf.reduce_sum(x * tf.log(y_hat))}
 loss = loss_functions[args.loss]
@@ -178,6 +185,8 @@ for epoch in range(start_epoch, args.epochs+start_epoch):
     epoch_start_time = time.time()
     training_start_time = time.time()
 
+    # TODO: shuffle data every epoch!
+    
     # perform training
     total_train_loss = 0.0
     for i in range(n_trbatches):
