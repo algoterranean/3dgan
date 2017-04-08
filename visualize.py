@@ -192,10 +192,20 @@ def visualize_bestfit_image(layer):
             # normalize gradients
             grads = grads / (tf.sqrt(tf.reduce_mean(tf.square(grads))) + 1e-5)
 
+
             # perform gradient ascent in image space
             for n in range(20):
                 loss_value, grads_value = sess.run([loss, grads], feed_dict={x_input: input_img_data})
-                input_img_data += grads_value                
+                input_img_data += grads_value
+                # apply regularizer
+                # gaussian
+                if n % 4 == 0:
+                    input_img_data = np.squeeze(input_img_data)
+                    input_img_data = cv2.GaussianBlur(input_img_data, (3, 3), 0.5)
+                    input_img_data = np.expand_dims(input_img_data, 0)
+                # l2 decay
+                input_img_data *= (1 - 0.0001)
+                
                 if loss_value <= 0:
                     input_img_data = np.ones([1, 64, 64, 3])
                     break
@@ -231,6 +241,23 @@ if __name__ == '__main__':
     parser.add_argument('--bestfit', default=False, action='store_true')
     args = parser.parse_args()
 
+    # plot loss
+    # note: needs to be done before loading dataset or model or it crashes (OOM).
+    # don't know why...
+    if args.loss or args.all:
+        print('Plotting loss...')
+        visualize_loss(args.dir)
+
+        
+    # load data, model, and checkpoint
+    # TODO add code to get_dataset to support not loading the entire dataset unless we need to
+    print('Loading dataset...')
+    data = get_dataset(args.data)
+    sample_indexes = np.random.choice(data.test.images.shape[0], args.examples, replace=False)
+    example_images = data.test.images[sample_indexes, :]
+    print('Loading model and checkpoint..')
+    sess = reload_session(args.dir)        
+
 
     ################################################    
     # prep dirs
@@ -254,23 +281,6 @@ if __name__ == '__main__':
 
     ################################################
     # generate visualizations!
-
-    # plot loss
-    # note: needs to be done before loading dataset or model or it crashes (OOM).
-    # don't know why...
-    if args.loss or args.all:
-        print('Plotting loss...')
-        visualize_loss(args.dir)        
-    
-    # load data, model, and checkpoint
-    # TODO add code to get_dataset to support not loading the entire dataset unless we need to
-    print('Loading dataset...')
-    data = get_dataset(args.data)
-    sample_indexes = np.random.choice(data.test.images.shape[0], args.examples, replace=False)
-    example_images = data.test.images[sample_indexes, :]
-    print('Loading model and checkpoint..')
-    sess = reload_session(args.dir)
-    
     
     # activations
     # TODO: add timelapse for each checkpoint
@@ -312,8 +322,8 @@ if __name__ == '__main__':
         print('Generating best fit images for each filter...') 
         layers = tf.get_collection('layers')
         i = 0
-        # for i in range(1):
-        for i in range(len(layers)):        
+        for i in range(2):
+        # for i in range(len(layers)):        
             print('Generating layer', i)
             sess = reload_session(args.dir)
             layer = tf.get_collection('layers')[i]
