@@ -78,6 +78,7 @@ with tf.variable_scope('global_vars'):
 # x_input is the tensor for our actual data
 # x is the tensor to be passed to the model (that is, after processing of actual data)
 # TODO: move this to Dataset class or something. dataset should be self-describing
+assert args.dataset in ['mnist', 'floorplans'], "Invalid dataset name '{}'".format(args.dataset)
 with tf.variable_scope('inputs'):
     if args.dataset == 'mnist':
         x_input = tf.placeholder("float", [None, 784], name='x_input')
@@ -88,6 +89,8 @@ with tf.variable_scope('inputs'):
         x = tf.image.rgb_to_grayscale(x_input, name='x') if args.grayscale else tf.identity(x_input, name='x')
         x = x - tf.reduce_mean(x)
 
+
+assert args.model in ['fc', 'cnn', 'chencnn', 'sharedcnn'], "Invalid model name '{}'".format(args.model)
 with tf.variable_scope('outputs'):
     # model    
     if args.model == 'fc':
@@ -98,6 +101,7 @@ with tf.variable_scope('outputs'):
         y_hat, model_summary_nodes = chen_cnn(x)
     elif args.model == 'sharedcnn':
         y_hat, model_summary_nodes = shared_cnn(x)
+    y_hat = tf.identity(y_hat, name='y_hat')
 
 
 # loss

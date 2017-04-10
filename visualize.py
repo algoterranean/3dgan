@@ -9,7 +9,10 @@ import datetime
 from math import ceil, sqrt
 from itertools import chain
 # local
-from models import simple_fc, simple_cnn
+from models.fc import simple_fc
+from models.conv import simple_cnn
+from models.chen import chen_cnn
+from models.shared_cnn import shared_cnn
 from util import *
 
 
@@ -161,12 +164,18 @@ def visualize_timelapse(workspace_dir, example_images):
     montage = [x*255.0 for x in example_images]
     for f in checkpoint_files:
         sess = reload_session(workspace_dir, os.path.join(workspace_dir, 'checkpoints', f))
+        # print("SESS:", sess)
         # TODO: find y_hat and x_input dynamically from model
         graph = tf.get_default_graph()
         x_input = graph.as_graph_element('inputs/x_input').outputs[0]
-        y_hat = graph.as_graph_element('outputs/decoder/Layer.Decoder.3').outputs[0]
+        y_hat = graph.as_graph_element('outputs/y_hat').outputs[0]
+        # y_hat = graph.as_graph_element('outputs/decoder/Layer.Decoder.3').outputs[0]
+        # print("X_INPUT:", x_input)
+        # print("Y_HAT:", y_hat)        
+        
         results = sess.run(y_hat, feed_dict={x_input: example_images})
         for r in results:
+            # print(r.max())
             montage.append(r * 255.0)
     return stitch_montage(montage, use_width=len(example_images)) #args.examples)
 
