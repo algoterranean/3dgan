@@ -163,19 +163,25 @@ def visualize_timelapse(workspace_dir, example_images):
 
     montage = [x*255.0 for x in example_images]
     for f in checkpoint_files:
+        # sess = reload_session(workspace_dir)
+        print('file:', f)
         sess = reload_session(workspace_dir, os.path.join(workspace_dir, 'checkpoints', f))
         # print("SESS:", sess)
         # TODO: find y_hat and x_input dynamically from model
         graph = tf.get_default_graph()
         x_input = graph.as_graph_element('inputs/x_input').outputs[0]
-        y_hat = graph.as_graph_element('outputs/y_hat').outputs[0]
-        # y_hat = graph.as_graph_element('outputs/decoder/Layer.Decoder.3').outputs[0]
+        # y_hat = graph.as_graph_element('outputs/y_hat').outputs[0]
+        y_hat = graph.as_graph_element('outputs/decoder/Layer.Decoder.3').outputs[0]
+        loss = graph.as_graph_element('loss_functions/l1').outputs[0]
+        print('output tensor:', y_hat)
         # print("X_INPUT:", x_input)
-        # print("Y_HAT:", y_hat)        
+        # print("Y_HAT:", y_hat)
         
-        results = sess.run(y_hat, feed_dict={x_input: example_images})
+        [results, l] = sess.run([y_hat, loss], feed_dict={x_input: example_images})
+        print('loss tensor:', loss)
+        print('loss:', l)
         for r in results:
-            # print(r.max())
+            print(r.max(), r.shape)
             montage.append(r * 255.0)
     return stitch_montage(montage, use_width=len(example_images)) #args.examples)
 

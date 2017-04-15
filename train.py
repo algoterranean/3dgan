@@ -31,8 +31,8 @@ parser = argparse.ArgumentParser()
 parser.add_argument('--epochs', type=int, default=3)
 parser.add_argument('--batchsize', type=int, default=256)
 parser.add_argument('--examples', type=int, default=10)
-parser.add_argument('--lr', type=float, default=0.01)
-parser.add_argument('--layers', type=int, nargs='+', default=(512, 256, 128))
+parser.add_argument('--lr', type=float, default=0.001)
+parser.add_argument('--layers', type=int, nargs='+', default=(256, 128, 64))
 parser.add_argument('--seed', type=int, default=os.urandom(4))
 parser.add_argument('--dataset', type=lambda s: s.lower(), default='mnist')
 parser.add_argument('--dir', type=str, default='workspace/{}'.format(uuid.uuid4()))
@@ -83,11 +83,11 @@ with tf.variable_scope('inputs'):
     if args.dataset == 'mnist':
         x_input = tf.placeholder("float", [None, 784], name='x_input')
         x = tf.reshape(x_input, [-1, 28, 28, 1], name='x')
-        x = x - tf.reduce_mean(x)
+        # x = x - tf.reduce_mean(x)
     elif args.dataset == 'floorplans':
         x_input = tf.placeholder("float", [None, 64, 64, 3], name='x_input')
         x = tf.image.rgb_to_grayscale(x_input, name='x') if args.grayscale else tf.identity(x_input, name='x')
-        x = x - tf.reduce_mean(x)
+        # x = x - tf.reduce_mean(x)
 
 
 assert args.model in ['fc', 'cnn', 'chencnn', 'sharedcnn'], "Invalid model name '{}'".format(args.model)
@@ -98,25 +98,28 @@ with tf.variable_scope('outputs'):
     elif args.model == 'cnn':
         y_hat, model_summary_nodes = simple_cnn(x, args.layers)
     elif args.model == 'chencnn':
+        print('using chens cnn')
         y_hat, model_summary_nodes = chen_cnn(x)
     elif args.model == 'sharedcnn':
         y_hat, model_summary_nodes = shared_cnn(x)
+    print('y_hat:', y_hat)
     y_hat = tf.identity(y_hat, name='y_hat')
 
 
 # loss
 with tf.variable_scope('loss_functions'):
-    loss_functions = {'l1': tf.reduce_mean(tf.abs(x - y_hat)),
-                      'l2': tf.reduce_mean(tf.pow(x - y_hat, 2)),
-                      'rmse': tf.sqrt(tf.reduce_mean(tf.pow(x - y_hat, 2))),
-                      'mse': tf.reduce_mean(tf.pow(x - y_hat, 2)),
-                      'ssim': 1.0 - tf_ssim(tf.image.rgb_to_grayscale(x), tf.image.rgb_to_grayscale(y_hat)),
-                      'crossentropy': -tf.reduce_sum(x * tf.log(y_hat))}
+    loss_functions = {'l1': tf.reduce_mean(tf.abs(x - y_hat), name='l1'),
+                      'l2': tf.reduce_mean(tf.pow(x - y_hat, 2), name='l2'),
+                      'rmse': tf.sqrt(tf.reduce_mean(tf.pow(x - y_hat, 2)), name='rmse'),
+                      'mse': tf.reduce_mean(tf.pow(x - y_hat, 2), name='mse'),
+                      'ssim': tf.subtract(1.0, tf_ssim(tf.image.rgb_to_grayscale(x), tf.image.rgb_to_grayscale(y_hat)), name='ssim'),
+                      'crossentropy': -tf.reduce_sum(x * tf.log(y_hat), name='crossentropy')}
 loss = loss_functions[args.loss]
+print('using loss:', loss)
 
 # optimizer
 with tf.variable_scope('optimizers'):
-    optimizers = {'rmsprop': tf.train.RMSPropOptimizer(args.lr, args.decay, args.momentum, centered=args.centered),
+    optimizers = {'rmsprop': tf.train.RMSPropOptimizer(args.lr, decay=args.decay, momentum=args.momentum, centered=args.centered),
                   'adadelta': tf.train.AdadeltaOptimizer(args.lr),
                   'gd': tf.train.GradientDescentOptimizer(args.lr),
                   'adagrad': tf.train.AdagradOptimizer(args.lr),
@@ -126,9 +129,12 @@ with tf.variable_scope('optimizers'):
                   'pgd': tf.train.ProximalGradientDescentOptimizer(args.lr),
                   'padagrad': tf.train.ProximalAdagradOptimizer(args.lr)}
 optimizer = optimizers[args.optimizer]
+print('using optimizer:', optimizer)
+
 
 # training step
 train_step = optimizer.minimize(loss, global_step=global_step)
+print('using train step:', train_step)
 
 
     
@@ -154,7 +160,7 @@ else:
 montage = None
 tb_writer = tf.summary.FileWriter(os.path.join(args.dir, 'logs'), graph=tf.get_default_graph())
 # add tensorboard node on model output for generating examples
-epoch_summary_nodes = tf.summary.merge([model_summary_nodes, tf.summary.image('model_output', y_hat)])
+epoch_summary_nodes = tf.summary.merge([model_summary_nodes, tf.summary.image('model_output', y_hat * 255.0)])
 batch_summary_nodes = tf.summary.merge([tf.summary.scalar('loss', loss),
                                         tf.summary.scalar('l1', loss_functions['l1']),
                                         tf.summary.scalar('l2', loss_functions['l2']),
@@ -178,11 +184,16 @@ sample_indexes = np.random.choice(data.test.images.shape[0], args.examples, repl
 print('Using example images', sample_indexes)
 example_images = data.test.images[sample_indexes, :]
 
+for r in example_images:
+    print('example image:', r.min(), r.max())
+
 # training!
 print('Starting training')
 start_epoch = sess.run(global_epoch) + 1
 n_trbatches = int(data.train.num_examples/args.batchsize)
 iterations_completed = sess.run(global_step) * args.batchsize
+
+example_num = 0
 
 # for each epoch...
 for epoch in range(start_epoch, args.epochs+start_epoch):
@@ -195,6 +206,9 @@ for epoch in range(start_epoch, args.epochs+start_epoch):
     total_train_loss = 0.0
     for i in range(n_trbatches):
         xs, ys = data.train.next_batch(args.batchsize)
+        # print('xs:', xs)
+        # print('ys:', ys)
+        # print('batch:', xs.shape, ys.shape)
         _, l = sess.run([train_step, loss], feed_dict={x_input: xs})
         total_train_loss += l
         iterations_completed += args.batchsize
@@ -204,6 +218,22 @@ for epoch in range(start_epoch, args.epochs+start_epoch):
         if batch_summary_nodes is not None:
             summary_result = sess.run(batch_summary_nodes, feed_dict={x_input: xs})
             tb_writer.add_summary(summary_result, iterations_completed)
+        if i % int(n_trbatches / 4) == 0:
+            print('Adding images')
+            # update tensorboard nodes
+            if epoch_summary_nodes is not None:
+                print('adding images 2')
+                results = sess.run(y_hat, feed_dict={x_input: example_images})
+                # print('results:', results)
+                for r in results:
+                    # print(r)
+                    image_path = os.path.join(args.dir, 'images', 'example_{}.png'.format(example_num))
+                    cv2.imwrite(image_path, r * 255)
+                    print(example_num, r.shape, r.max())
+                    example_num += 1
+                    
+                summary_result = sess.run(epoch_summary_nodes, feed_dict={x_input: example_images})
+                tb_writer.add_summary(summary_result, i * args.batchsize + data.train.num_examples * (epoch-1))
             
         
     avg_train_loss = total_train_loss/n_trbatches
@@ -211,21 +241,21 @@ for epoch in range(start_epoch, args.epochs+start_epoch):
     if not args.interactive:
         print('Epoch {}: Train loss ({:.5f}), elapsed time {}'.format(epoch, avg_train_loss, training_end_time-training_start_time))
         
-    # perform validation
-    validation_start_time = time.time()
-    n_valbatches = int(data.validation.num_examples/args.batchsize)
-    total_validation_loss = 0.0
-    for i in range(n_valbatches):
-        xs, ys = data.validation.next_batch(args.batchsize)
-        total_validation_loss += sess.run(loss, feed_dict={x_input: xs})
-    validation_end_time = time.time()
-    avg_validation_loss = total_validation_loss/n_valbatches
-    log_files['validate_loss'].write('{:05d},{:.5f}\n'.format(iterations_completed, avg_validation_loss))
-    if args.interactive:
-        sys.stdout.write(', validation: {:.4f}'.format(avg_validation_loss))
-        sys.stdout.write('\r\n')
-    else:
-        print('Epoch {}: Validation loss ({:.5f}), elapsed time {}'.format(epoch, avg_validation_loss, validation_end_time - validation_start_time))
+    # # perform validation
+    # validation_start_time = time.time()
+    # n_valbatches = int(data.validation.num_examples/args.batchsize)
+    # total_validation_loss = 0.0
+    # for i in range(n_valbatches):
+    #     xs, ys = data.validation.next_batch(args.batchsize)
+    #     total_validation_loss += sess.run(loss, feed_dict={x_input: xs})
+    # validation_end_time = time.time()
+    # avg_validation_loss = total_validation_loss/n_valbatches
+    # log_files['validate_loss'].write('{:05d},{:.5f}\n'.format(iterations_completed, avg_validation_loss))
+    # if args.interactive:
+    #     sys.stdout.write(', validation: {:.4f}'.format(avg_validation_loss))
+    #     sys.stdout.write('\r\n')
+    # else:
+    #     print('Epoch {}: Validation loss ({:.5f}), elapsed time {}'.format(epoch, avg_validation_loss, validation_end_time - validation_start_time))
 
 
     # update tensorboard nodes

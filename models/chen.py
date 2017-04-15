@@ -57,12 +57,12 @@ def chen_cnn(x):
         x = _chen_upconv_layer(x, 256, 5, 2, 'Layer.Decoder.256x2')
         summary_nodes.append(tf.summary.histogram('Decoder 256x2', x))                
         x = _chen_upconv_layer(x, 128, 5, 2, 'Layer.Decoder.128')
-        summary_nodes.append(tf.summary.histogram('Decoder 128', x))                
+        summary_nodes.append(tf.summary.histogram('Decoder 128', x))
         x = _chen_upconv_layer(x, 64, 5, 2, 'Layer.Decoder.64')
-        summary_nodes.append(tf.summary.histogram('Decoder 64', x))                
+        summary_nodes.append(tf.summary.histogram('Decoder 64', x))
         # output
         x = _chen_upconv_layer(x, 3, 5, 2, 'Layer.Decoder.3')
-        summary_nodes.append(tf.summary.histogram('Decoder 3', x))                
+        summary_nodes.append(tf.summary.histogram('Decoder 3', x))
 
     return x, tf.summary.merge(summary_nodes)
 
