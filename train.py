@@ -25,6 +25,95 @@ from util import *
 # TODO move this stuff to functions
 # TODO add interactive back in as the default, but write a summary to disk for later review (in case terminal session is lost)
 
+def init_session(seed):
+    random.seed(seed)
+    return tf.Session()
+
+
+def init_globals(sess):
+    with sess.as_default():
+        # variables to track training progress. useful when resuming training from disk.
+        with tf.variable_scope('global_vars'):
+            global_step = tf.Variable(0, name='global_step', trainable=False)
+            global_epoch = tf.Variable(0, name='global_epoch', trainable=False)
+            global_batchsize = tf.Variable(args.batchsize, name='global_batchsize', trainable=False)
+    return global_step, global_epoch, global_batchsize
+
+
+
+def init_input(sess, dataset, grayscale=False):
+    with sess.as_default():
+        # input tensor for dataset.
+        # x_input is the tensor for our actual data
+        # x is the tensor to be passed to the model (that is, after processing of actual data)
+        # TODO: move this to Dataset class or something. dataset should be self-describing
+        assert dataset in ['mnist', 'floorplans'], "Invalid dataset name '{}'".format(dataset)
+        with tf.variable_scope('inputs'):
+            if dataset == 'mnist':
+                x_input = tf.placeholder("float", [None, 784], name='x_input')
+                x = tf.reshape(x_input, [-1, 28, 28, 1], name='x')
+                # x = x - tf.reduce_mean(x)
+            elif dataset == 'floorplans':
+                x_input = tf.placeholder("float", [None, 64, 64, 3], name='x_input')
+                x = tf.image.rgb_to_grayscale(x_input, name='x') if args.grayscale else tf.identity(x_input, name='x')
+                # x = x - tf.reduce_mean(x)
+    return x, x_input
+
+
+def init_model(sess, model):
+    assert model in ['fc', 'cnn', 'chencnn', 'sharedcnn'], "Invalid model name '{}'".format(model)
+    with sess.as_default():
+        with tf.variable_scope('outputs'):
+            # model    
+            if args.model == 'fc':
+                y_hat, model_summary_nodes = simple_fc(x, args.layers)
+            elif args.model == 'cnn':
+                y_hat, model_summary_nodes = simple_cnn(x, args.layers)
+            elif args.model == 'chencnn':
+                y_hat, model_summary_nodes = chen_cnn(x)
+            elif args.model == 'sharedcnn':
+                y_hat, model_summary_nodes = shared_cnn(x)
+            y_hat = tf.identity(y_hat, name='y_hat')
+        model_summary_nodes = tf.summary.merge([model_summary_nodes, tf.summary.image('model_output', y_hat * 255.0)])
+        
+    return y_hat, model_summary_nodes
+
+
+def init_loss(sess):
+    with sess.as_default():
+        with tf.variable_scope('loss_functions'):
+            loss_functions = {'l1': tf.reduce_mean(tf.abs(x - y_hat), name='l1'),
+                      'l2': tf.reduce_mean(tf.pow(x - y_hat, 2), name='l2'),
+                      'rmse': tf.sqrt(tf.reduce_mean(tf.pow(x - y_hat, 2)), name='rmse'),
+                      'mse': tf.reduce_mean(tf.pow(x - y_hat, 2), name='mse'),
+                      'ssim': tf.subtract(1.0, tf_ssim(tf.image.rgb_to_grayscale(x), tf.image.rgb_to_grayscale(y_hat)), name='ssim'),
+                      'crossentropy': -tf.reduce_sum(x * tf.log(y_hat), name='crossentropy')}
+    return loss_functions
+
+
+def init_optimizer(args):
+    with tf.variable_scope('optimizers'):
+        optimizers = {'rmsprop': tf.train.RMSPropOptimizer(args.lr, decay=args.decay, momentum=args.momentum, centered=args.centered),
+                          'adadelta': tf.train.AdadeltaOptimizer(args.lr),
+                          'gd': tf.train.GradientDescentOptimizer(args.lr),
+                          'adagrad': tf.train.AdagradOptimizer(args.lr),
+                          'momentum': tf.train.MomentumOptimizer(args.lr, args.momentum),
+                          'adam': tf.train.AdamOptimizer(args.lr),
+                          'ftrl': tf.train.FtrlOptimizer(args.lr),
+                          'pgd': tf.train.ProximalGradientDescentOptimizer(args.lr),
+                          'padagrad': tf.train.ProximalAdagradOptimizer(args.lr)}
+    return optimizers[args.optimizer]
+
+
+def init_tensorboard(sess, dir, model_summary, loss_functions):
+    with sess.as_default():
+        tb_writer = tf.summary.FileWriter(os.path.join(dir, 'logs'), graph=tf.get_default_graph())
+        epoch_summary_nodes = tf.summary.merge([model_summary])
+        batch_summary_nodes = tf.summary.merge([tf.summary.scalar(k, v) for k, v in loss_functions.items()])
+        train_start_summary_nodes = None
+        train_end_summary_nodes = None
+    return tb_writer, batch_summary_nodes, epoch_summary_nodes, train_start_summary_nodes, train_end_summary_nodes
+
 
 # command line arguments
 parser = argparse.ArgumentParser()
@@ -59,79 +148,27 @@ if args.resume:
     print('Args restored')
     
     
+# init session, seed
+sess = init_session(args.seed)
 
-# seed
-print('Setting seed to', args.seed)
-random.seed(args.seed)
+# init globals
+global_step, global_epoch, global_batchsize = init_globals(sess)
 
-# session and global vars
-sess = tf.Session()
+# setup input nodes (including any image filters)
+x, x_input = init_input(sess, args.dataset, grayscale=args.grayscale)
 
-# variables to track training progress. useful when resuming training from disk.
-with tf.variable_scope('global_vars'):
-    global_step = tf.Variable(0, name='global_step', trainable=False)
-    global_epoch = tf.Variable(0, name='global_epoch', trainable=False)
-    global_batchsize = tf.Variable(args.batchsize, name='global_batchsize', trainable=False)
-
-
-# input tensor for dataset.
-# x_input is the tensor for our actual data
-# x is the tensor to be passed to the model (that is, after processing of actual data)
-# TODO: move this to Dataset class or something. dataset should be self-describing
-assert args.dataset in ['mnist', 'floorplans'], "Invalid dataset name '{}'".format(args.dataset)
-with tf.variable_scope('inputs'):
-    if args.dataset == 'mnist':
-        x_input = tf.placeholder("float", [None, 784], name='x_input')
-        x = tf.reshape(x_input, [-1, 28, 28, 1], name='x')
-        # x = x - tf.reduce_mean(x)
-    elif args.dataset == 'floorplans':
-        x_input = tf.placeholder("float", [None, 64, 64, 3], name='x_input')
-        x = tf.image.rgb_to_grayscale(x_input, name='x') if args.grayscale else tf.identity(x_input, name='x')
-        # x = x - tf.reduce_mean(x)
-
-
-assert args.model in ['fc', 'cnn', 'chencnn', 'sharedcnn'], "Invalid model name '{}'".format(args.model)
-with tf.variable_scope('outputs'):
-    # model    
-    if args.model == 'fc':
-        y_hat, model_summary_nodes = simple_fc(x, args.layers)
-    elif args.model == 'cnn':
-        y_hat, model_summary_nodes = simple_cnn(x, args.layers)
-    elif args.model == 'chencnn':
-        y_hat, model_summary_nodes = chen_cnn(x)
-    elif args.model == 'sharedcnn':
-        y_hat, model_summary_nodes = shared_cnn(x)
-    y_hat = tf.identity(y_hat, name='y_hat')
-
+# setup model
+y_hat, model_summary_nodes = init_model(sess, args.model)
 
 # loss
-with tf.variable_scope('loss_functions'):
-    loss_functions = {'l1': tf.reduce_mean(tf.abs(x - y_hat), name='l1'),
-                      'l2': tf.reduce_mean(tf.pow(x - y_hat, 2), name='l2'),
-                      'rmse': tf.sqrt(tf.reduce_mean(tf.pow(x - y_hat, 2)), name='rmse'),
-                      'mse': tf.reduce_mean(tf.pow(x - y_hat, 2), name='mse'),
-                      'ssim': tf.subtract(1.0, tf_ssim(tf.image.rgb_to_grayscale(x), tf.image.rgb_to_grayscale(y_hat)), name='ssim'),
-                      'crossentropy': -tf.reduce_sum(x * tf.log(y_hat), name='crossentropy')}
+loss_functions = init_loss(sess)
 loss = loss_functions[args.loss]
 
-
 # optimizer
-with tf.variable_scope('optimizers'):
-    optimizers = {'rmsprop': tf.train.RMSPropOptimizer(args.lr, decay=args.decay, momentum=args.momentum, centered=args.centered),
-                  'adadelta': tf.train.AdadeltaOptimizer(args.lr),
-                  'gd': tf.train.GradientDescentOptimizer(args.lr),
-                  'adagrad': tf.train.AdagradOptimizer(args.lr),
-                  'momentum': tf.train.MomentumOptimizer(args.lr, args.momentum),
-                  'adam': tf.train.AdamOptimizer(args.lr),
-                  'ftrl': tf.train.FtrlOptimizer(args.lr),
-                  'pgd': tf.train.ProximalGradientDescentOptimizer(args.lr),
-                  'padagrad': tf.train.ProximalAdagradOptimizer(args.lr)}
-optimizer = optimizers[args.optimizer]
-
+optimizer = init_optimizer(args)
 
 # training step
 train_step = optimizer.minimize(loss, global_step=global_step)
-    
         
 # workspace
 log_files = prep_workspace(args.dir)
@@ -149,30 +186,21 @@ else:
     saver.restore(sess, tf.train.latest_checkpoint(os.path.join(args.dir, 'checkpoints')))
     print('Model restored. Currently at step {} and epoch {} with batch size {}'.format(sess.run(global_step), sess.run(global_epoch), sess.run(global_batchsize)))
 
+    
+
 
 # tensorboard
-montage = None
-tb_writer = tf.summary.FileWriter(os.path.join(args.dir, 'logs'), graph=tf.get_default_graph())
-# add tensorboard node on model output for generating examples
-epoch_summary_nodes = tf.summary.merge([model_summary_nodes, tf.summary.image('model_output', y_hat * 255.0)])
-batch_summary_nodes = tf.summary.merge([tf.summary.scalar('loss', loss),
-                                        tf.summary.scalar('l1', loss_functions['l1']),
-                                        tf.summary.scalar('l2', loss_functions['l2']),
-                                        tf.summary.scalar('rmse', loss_functions['rmse']),
-                                        tf.summary.scalar('crossentropy', loss_functions['crossentropy'])])
-train_start_summary_nodes = None
-train_end_summary_nodes = None
-
-
+tb_writer, batch_summary_nodes, epoch_summary_nodes, \
+  train_start_summary_nodes, train_end_summary_nodes = init_tensorboard(sess, args.dir, model_summary_nodes, loss_functions)
+        
 # print out schematic/visualization of model
 total_params = visualize_parameters()
 print('Total params: {}'.format(total_params))
 
 
-
 # dataset
 data = get_dataset(args.dataset)
-# # example data for visualizing results/progress
+# example data for visualizing results/progress
 sample_indexes = np.random.choice(data.test.images.shape[0], args.examples, replace=False)
 example_images = data.test.images[sample_indexes, :]
 
