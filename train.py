@@ -98,11 +98,9 @@ with tf.variable_scope('outputs'):
     elif args.model == 'cnn':
         y_hat, model_summary_nodes = simple_cnn(x, args.layers)
     elif args.model == 'chencnn':
-        print('using chens cnn')
         y_hat, model_summary_nodes = chen_cnn(x)
     elif args.model == 'sharedcnn':
         y_hat, model_summary_nodes = shared_cnn(x)
-    print('y_hat:', y_hat)
     y_hat = tf.identity(y_hat, name='y_hat')
 
 
@@ -115,7 +113,7 @@ with tf.variable_scope('loss_functions'):
                       'ssim': tf.subtract(1.0, tf_ssim(tf.image.rgb_to_grayscale(x), tf.image.rgb_to_grayscale(y_hat)), name='ssim'),
                       'crossentropy': -tf.reduce_sum(x * tf.log(y_hat), name='crossentropy')}
 loss = loss_functions[args.loss]
-print('using loss:', loss)
+
 
 # optimizer
 with tf.variable_scope('optimizers'):
@@ -129,14 +127,10 @@ with tf.variable_scope('optimizers'):
                   'pgd': tf.train.ProximalGradientDescentOptimizer(args.lr),
                   'padagrad': tf.train.ProximalAdagradOptimizer(args.lr)}
 optimizer = optimizers[args.optimizer]
-print('using optimizer:', optimizer)
 
 
 # training step
 train_step = optimizer.minimize(loss, global_step=global_step)
-print('using train step:', train_step)
-
-
     
         
 # workspace
@@ -176,16 +170,12 @@ print('Total params: {}'.format(total_params))
 
 
 
-
 # dataset
 data = get_dataset(args.dataset)
 # # example data for visualizing results/progress
 sample_indexes = np.random.choice(data.test.images.shape[0], args.examples, replace=False)
-print('Using example images', sample_indexes)
 example_images = data.test.images[sample_indexes, :]
 
-for r in example_images:
-    print('example image:', r.min(), r.max())
 
 # training!
 print('Starting training')
@@ -206,9 +196,6 @@ for epoch in range(start_epoch, args.epochs+start_epoch):
     total_train_loss = 0.0
     for i in range(n_trbatches):
         xs, ys = data.train.next_batch(args.batchsize)
-        # print('xs:', xs)
-        # print('ys:', ys)
-        # print('batch:', xs.shape, ys.shape)
         _, l = sess.run([train_step, loss], feed_dict={x_input: xs})
         total_train_loss += l
         iterations_completed += args.batchsize
@@ -218,22 +205,6 @@ for epoch in range(start_epoch, args.epochs+start_epoch):
         if batch_summary_nodes is not None:
             summary_result = sess.run(batch_summary_nodes, feed_dict={x_input: xs})
             tb_writer.add_summary(summary_result, iterations_completed)
-        if i % int(n_trbatches / 4) == 0:
-            print('Adding images')
-            # update tensorboard nodes
-            if epoch_summary_nodes is not None:
-                print('adding images 2')
-                results = sess.run(y_hat, feed_dict={x_input: example_images})
-                # print('results:', results)
-                for r in results:
-                    # print(r)
-                    image_path = os.path.join(args.dir, 'images', 'example_{}.png'.format(example_num))
-                    cv2.imwrite(image_path, r * 255)
-                    print(example_num, r.shape, r.max())
-                    example_num += 1
-                    
-                summary_result = sess.run(epoch_summary_nodes, feed_dict={x_input: example_images})
-                tb_writer.add_summary(summary_result, i * args.batchsize + data.train.num_examples * (epoch-1))
             
         
     avg_train_loss = total_train_loss/n_trbatches
@@ -241,21 +212,21 @@ for epoch in range(start_epoch, args.epochs+start_epoch):
     if not args.interactive:
         print('Epoch {}: Train loss ({:.5f}), elapsed time {}'.format(epoch, avg_train_loss, training_end_time-training_start_time))
         
-    # # perform validation
-    # validation_start_time = time.time()
-    # n_valbatches = int(data.validation.num_examples/args.batchsize)
-    # total_validation_loss = 0.0
-    # for i in range(n_valbatches):
-    #     xs, ys = data.validation.next_batch(args.batchsize)
-    #     total_validation_loss += sess.run(loss, feed_dict={x_input: xs})
-    # validation_end_time = time.time()
-    # avg_validation_loss = total_validation_loss/n_valbatches
-    # log_files['validate_loss'].write('{:05d},{:.5f}\n'.format(iterations_completed, avg_validation_loss))
-    # if args.interactive:
-    #     sys.stdout.write(', validation: {:.4f}'.format(avg_validation_loss))
-    #     sys.stdout.write('\r\n')
-    # else:
-    #     print('Epoch {}: Validation loss ({:.5f}), elapsed time {}'.format(epoch, avg_validation_loss, validation_end_time - validation_start_time))
+    # perform validation
+    validation_start_time = time.time()
+    n_valbatches = int(data.validation.num_examples/args.batchsize)
+    total_validation_loss = 0.0
+    for i in range(n_valbatches):
+        xs, ys = data.validation.next_batch(args.batchsize)
+        total_validation_loss += sess.run(loss, feed_dict={x_input: xs})
+    validation_end_time = time.time()
+    avg_validation_loss = total_validation_loss/n_valbatches
+    log_files['validate_loss'].write('{:05d},{:.5f}\n'.format(iterations_completed, avg_validation_loss))
+    if args.interactive:
+        sys.stdout.write(', validation: {:.4f}'.format(avg_validation_loss))
+        sys.stdout.write('\r\n')
+    else:
+        print('Epoch {}: Validation loss ({:.5f}), elapsed time {}'.format(epoch, avg_validation_loss, validation_end_time - validation_start_time))
 
 
     # update tensorboard nodes
@@ -288,7 +259,7 @@ print('Training completed')
 
 
 # perform test
-print('Starting testing')    
+print('Starting testing')
 n_testbatches = int(data.test.num_examples/args.batchsize)
 total_test_loss = 0.0
 for i in range(n_testbatches):
