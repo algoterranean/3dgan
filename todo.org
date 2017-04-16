@@ -43,7 +43,10 @@
   - State "CANCELED"   from "DONE"       [2017-04-16 Sun 06:12]
   - State "DONE"       from "STARTED"    [2017-04-16 Sun 06:12]
   - State "STARTED"    from "TODO"       [2017-04-16 Sun 06:12]
-* TODO Enable support for shuffling data on each epoch
+* DONE Enable support for shuffling data on each epoch
+  CLOSED: [2017-04-16 Sun 08:19]
+  - State "DONE"       from "STARTED"    [2017-04-16 Sun 08:19]
+  - State "STARTED"    from "TODO"       [2017-04-16 Sun 08:19]
 * TODO Add option to use partial dataset per epoch, or to do validation more frequently than per epoch
 * TODO Add option to get_dataset to support not loading the entire dataset unless we need to
 * TODO Add option to visualize/montage for the border color.
@@ -52,3 +55,5 @@
 * TODO Add option to visualize for visualizing both train and test data for comparison
 * TODO Add ability to visualize/activations to do it for each checkpoint
 * TODO Write summary info to text file for later (non-interactive) review.
+* TODO Add option to visualization/weights/activations/etc to allow other image palettes/colors than grayscale (for better visualization)
+

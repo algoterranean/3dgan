@@ -19,7 +19,6 @@ def print_progress(epoch, completed, total, loss, start_time):
 
 
 def get_dataset(name):
-    # print('Loading dataset...')
     if name == 'mnist':
         from tensorflow.examples.tutorials.mnist import input_data
         return input_data.read_data_sets("data/MNIST_data", one_hot=True)
