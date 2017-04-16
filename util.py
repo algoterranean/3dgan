@@ -9,27 +9,6 @@ import time
 # local
 from data import Floorplans
 
-# # helper functions
-# def generate_example_row(data, tensor, xs, include_actual, sess, x_input, args):
-#     examples = sess.run(tensor, feed_dict={x_input: xs})
-#     montage = None
-#     for i, pred in enumerate(examples):
-#         if include_actual:
-#             if args.grayscale:
-#                 input_img = cv2.cvtColor(xs[i], cv2.COLOR_BGR2GRAY)
-#                 pred = np.squeeze(pred)
-#             else:
-#                 input_img = xs[i] #data.test.images[i] 
-#             if args.dataset == 'mnist':
-#                 input_img = np.reshape(input_img, [28, 28, 1])
-#             # print('pred:', pred.shape, 'input_img:', input_img.shape)
-#             v = np.vstack((input_img * 255.0, pred * 255.0))
-#         else:
-#             if args.grayscale:
-#                 pred = np.squeeze(pred)
-#             v = pred * 255.0
-#         montage = v if montage is None else np.hstack((montage, v))
-#     return montage
 
 
 def print_progress(epoch, completed, total, loss, start_time):

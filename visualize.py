@@ -55,7 +55,6 @@ def chunks(l, n):
         yield l[i:i + n]
 
 
-# TODO: Add option to use color for a border
 def stitch_montage(image_list, add_border=True, use_width=0):
     """Stitch a list of equally-shaped images into a single image."""
     num_images = len(image_list)
@@ -109,7 +108,6 @@ def visualize_loss(dir):
     
     
 
-# TODO: Add option for x_input, or find it dynamically
 def visualize_activations(layer, input):
     """Generate image of layer's activations given a specific input."""
     # input is a single image, so put it into batch form for sess.run
@@ -129,7 +127,6 @@ def visualize_all_activations(layers, input):
     return [visualize_activations(layer, input) for layer in layers]
 
 
-# TODO: Given a layer, find the weights
 # visualize trained weights
 def visualize_weights(var):
     """Generate image of the weights of a layer."""
@@ -154,7 +151,6 @@ def visualize_all_weights(weights):
 
 def visualize_timelapse(workspace_dir, example_images):
     # get list of checkpoint files in order
-    # TODO: use creation time instead of name to order
     checkpoint_files = []
     for f in os.listdir(os.path.join(workspace_dir, 'checkpoints')):
         if f.endswith('.meta'):
@@ -163,16 +159,11 @@ def visualize_timelapse(workspace_dir, example_images):
 
     montage = [x*255.0 for x in example_images]
     for f in checkpoint_files:
-        # sess = reload_session(workspace_dir)
         sess = reload_session(workspace_dir, os.path.join(workspace_dir, 'checkpoints', f))
-
-        # TODO: find y_hat and x_input dynamically from model
         graph = tf.get_default_graph()
         x_input = graph.as_graph_element('inputs/x_input').outputs[0]
         y_hat = graph.as_graph_element('outputs/y_hat').outputs[0]
-        # y_hat = graph.as_graph_element('outputs/decoder/Layer.Decoder.3').outputs[0]
-        # loss = graph.as_graph_element('loss_functions/l1').outputs[0]
-
+        
         results = sess.run(y_hat, feed_dict={x_input: example_images})
         for r in results:
             montage.append(r * 255.0)
@@ -231,7 +222,6 @@ def visualize_all_bestfit_images(layers):
 
 
 
-# TODO: add support for visualizing both test and training data examples for comparison
 if __name__ == '__main__':
     
     ################################################    
@@ -258,7 +248,6 @@ if __name__ == '__main__':
 
         
     # load data, model, and checkpoint
-    # TODO add code to get_dataset to support not loading the entire dataset unless we need to
     print('Loading dataset...')
     data = get_dataset(args.data)
     sample_indexes = np.random.choice(data.test.images.shape[0], args.examples, replace=False)
@@ -314,7 +303,6 @@ if __name__ == '__main__':
 
 
     # weights
-    # TODO: add timelapse for each checkpoint                
     # note, the only variables we are interested in are the conv weights, which have shape of length 4
     if args.weights or args.all:
         print('Generating weights visualization...')
@@ -326,7 +314,7 @@ if __name__ == '__main__':
 
         
     # best fit via gradient ascent
-    if args.bestfit or args.all:
+    if args.bestfit:
         print('Generating best fit images for each filter...') 
         layers = tf.get_collection('layers')
         i = 0
