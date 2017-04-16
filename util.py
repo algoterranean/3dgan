@@ -5,6 +5,7 @@ import os
 import sys
 import cv2
 import shutil
+import time
 # local
 from data import Floorplans
 
@@ -31,9 +32,10 @@ from data import Floorplans
 #     return montage
 
 
-def print_progress(epoch, completed, total, loss):
+def print_progress(epoch, completed, total, loss, start_time):
+    end_time = time.time()
     sys.stdout.write('\r')
-    sys.stdout.write('Epoch {:03d}: {:05d}/{:05d}: {:.4f}'.format(epoch, completed, total, loss))
+    sys.stdout.write('Epoch {:03d}: {:05d}/{:05d}: {:.4f} ({:d}s)'.format(epoch, completed, total, loss, int(end_time - start_time)))
     sys.stdout.flush()
 
 

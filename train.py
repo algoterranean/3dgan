@@ -115,6 +115,19 @@ def init_tensorboard(sess, dir, model_summary, loss_functions):
     return tb_writer, batch_summary_nodes, epoch_summary_nodes, train_start_summary_nodes, train_end_summary_nodes
 
 
+def fold(ops, data, batch_size, num_batches):
+    start_time = time.time()
+    total_values = [0.0 for x in ops]
+    for i in range(num_batches):
+        xs, ys = data.next_batch(batch_size)
+        results = sess.run(ops, feed_dict={x_input: xs})
+        for j in range(len(results)):
+            total_values[j] += results[j]
+    end_time = time.time()
+    avg_values = [x/num_batches for x in total_values]
+    return avg_values
+
+
 # command line arguments
 parser = argparse.ArgumentParser()
 parser.add_argument('--epochs', type=int, default=3)
@@ -126,7 +139,7 @@ parser.add_argument('--seed', type=int, default=os.urandom(4))
 parser.add_argument('--dataset', type=lambda s: s.lower(), default='mnist')
 parser.add_argument('--dir', type=str, default='workspace/{}'.format(uuid.uuid4()))
 parser.add_argument('--resume', default=False, action='store_true')
-parser.add_argument('--interactive', default=False, action='store_true')
+# parser.add_argument('--interactive', default=False, action='store_true')
 parser.add_argument('--model', type=lambda s: s.lower(), default='fc')
 parser.add_argument('--grayscale', default=False, action='store_true')
 parser.add_argument('--loss', type=lambda s: s.lower(), default='l1')
@@ -209,103 +222,79 @@ example_images = data.test.images[sample_indexes, :]
 print('Starting training')
 start_epoch = sess.run(global_epoch) + 1
 n_trbatches = int(data.train.num_examples/args.batchsize)
+n_valbatches = int(data.validation.num_examples/args.batchsize)
+n_testbatches = int(data.test.num_examples/args.batchsize)
 iterations_completed = sess.run(global_step) * args.batchsize
 
-example_num = 0
 
 # for each epoch...
 for epoch in range(start_epoch, args.epochs+start_epoch):
     epoch_start_time = time.time()
-    training_start_time = time.time()
 
-    # TODO: shuffle data every epoch!
-    
     # perform training
+    ###############################################
     total_train_loss = 0.0
     for i in range(n_trbatches):
+        # run train step
+        # TODO: shuffle data every epoch!
         xs, ys = data.train.next_batch(args.batchsize)
         _, l = sess.run([train_step, loss], feed_dict={x_input: xs})
+        
+        # update metrics
         total_train_loss += l
         iterations_completed += args.batchsize
+        
+        # log and print progress
         log_files['train_loss'].write('{:05d},{:.5f}\n'.format(iterations_completed, l))
-        if args.interactive:
-            print_progress(epoch, iterations_completed, data.train.num_examples, l)
+        print_progress(epoch, iterations_completed, data.train.num_examples, l, epoch_start_time)
+        
+        # run batch summary nodes
         if batch_summary_nodes is not None:
             summary_result = sess.run(batch_summary_nodes, feed_dict={x_input: xs})
             tb_writer.add_summary(summary_result, iterations_completed)
+    
             
-        
-    avg_train_loss = total_train_loss/n_trbatches
-    training_end_time = time.time()
-    if not args.interactive:
-        print('Epoch {}: Train loss ({:.5f}), elapsed time {}'.format(epoch, avg_train_loss, training_end_time-training_start_time))
-        
     # perform validation
-    validation_start_time = time.time()
-    n_valbatches = int(data.validation.num_examples/args.batchsize)
-    total_validation_loss = 0.0
-    for i in range(n_valbatches):
-        xs, ys = data.validation.next_batch(args.batchsize)
-        total_validation_loss += sess.run(loss, feed_dict={x_input: xs})
-    validation_end_time = time.time()
-    avg_validation_loss = total_validation_loss/n_valbatches
-    log_files['validate_loss'].write('{:05d},{:.5f}\n'.format(iterations_completed, avg_validation_loss))
-    if args.interactive:
-        sys.stdout.write(', validation: {:.4f}'.format(avg_validation_loss))
-        sys.stdout.write('\r\n')
-    else:
-        print('Epoch {}: Validation loss ({:.5f}), elapsed time {}'.format(epoch, avg_validation_loss, validation_end_time - validation_start_time))
+    results = fold([loss], data.validation, args.batchsize, n_valbatches)
+    # log and print progress
+    log_files['validate_loss'].write('{:05d},{:.5f}\n'.format(iterations_completed, results[0]))
+    # sys.stdout.write(', validation: {:.4f} ({:d}s)'.format(results[0], int(validation_end_time - validation_start_time)))
+    sys.stdout.write(', validation: {:.4f}'.format(results[0]))
+    sys.stdout.write('\r\n')
 
-
-    # update tensorboard nodes
+    
+    # run epoch summary nodes
     if epoch_summary_nodes is not None:
         summary_result = sess.run(epoch_summary_nodes, feed_dict={x_input: example_images})
         tb_writer.add_summary(summary_result, epoch)
         
         
     # snapshot
-    if args.interactive:
-        sys.stdout.write('Writing snapshot to disk...')
-    else:
-        print('Writing snapshot to disk...')
+    sys.stdout.write('Writing snapshot to disk...')
     chkfile = os.path.join(args.dir, 'checkpoints', 'epoch_{:03d}.ckpt'.format(epoch))
     saver.save(sess, chkfile, global_step=global_step)
-    if args.interactive:
-        sys.stdout.write('complete!\r\n')
-        sys.stdout.flush()
     epoch_end_time = time.time()
-    print('Total elapsed epoch time: {}'.format(epoch_end_time - epoch_start_time))
+    sys.stdout.write('complete!\r\n')
+    sys.stdout.flush()
 
-    # keep track of current epoch
+
+    # keep track of current epoch in global vars
     sess.run(global_epoch.assign(epoch+1))
-    
-
     
 # training completed!
 print('Training completed')
 
 
-
 # perform test
 print('Starting testing')
-n_testbatches = int(data.test.num_examples/args.batchsize)
-total_test_loss = 0.0
-for i in range(n_testbatches):
-    xs, ys = data.test.next_batch(args.batchsize)
-    l = sess.run(loss, feed_dict={x_input: xs})
-    total_test_loss += l
-    if args.interactive:
-        sys.stdout.write('\r')
-        sys.stdout.write('test: {:.4f}'.format(l))
-        sys.stdout.flush()
-avg_test_loss = total_test_loss/n_testbatches
-log_files['test_loss'].write('{:05d},{:.5f}\n'.format(iterations_completed, avg_test_loss))
-if args.interactive:
-    sys.stdout.write('\r\n')
-else:
-    print('Test loss: {:.5f}'.format(avg_test_loss))
+results = fold([loss], data.test, args.batchsize, n_testbatches)
+# log and print progress
+log_files['test_loss'].write('{:05d},{:.5f}\n'.format(iterations_completed, results[0]))
+sys.stdout.write(', validation: {:.4f}'.format(results[0]))
+sys.stdout.write('\rtest: {:.4f}'.format(results[0]))
+sys.stdout.write('\r\n')
+sys.stdout.flush()
 
-    
 
 # close down log files
 for key in log_files:
