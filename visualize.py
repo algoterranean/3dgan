@@ -9,10 +9,10 @@ import datetime
 from math import ceil, sqrt
 from itertools import chain
 # local
-from models.fc import simple_fc
-from models.conv import simple_cnn
-from models.chen import chen_cnn
-from models.shared_cnn import shared_cnn
+# from models.fc import simple_fc
+# from models.conv import simple_cnn
+# from models.chen import chen_cnn
+# from models.shared_cnn import shared_cnn
 from util import *
 
 

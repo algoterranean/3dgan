@@ -12,14 +12,14 @@ import cv2
 import time
 from sys import stdout
 # local
-from models.fc import simple_fc
-from models.conv import simple_cnn
-from models.chen import chen_cnn
-from models.shared_cnn import shared_cnn
+from models.fc import SimpleFC
+from models.conv import SimpleCNN
+from models.chen import ChenCNN
 # from models import fc.simple_fc, simple_cnn, chen_cnn, shared_cnn
 from msssim import MultiScaleSSIM, tf_ssim, tf_ms_ssim
 from data import Floorplans
 from util import *
+
 
 
 
@@ -58,21 +58,19 @@ def init_input(sess, dataset, grayscale=False):
     return x, x_input
 
 
-def init_model(sess, model):
-    assert model in ['fc', 'cnn', 'chencnn', 'sharedcnn'], "Invalid model name '{}'".format(model)
+def init_model(sess, model_name):
+    assert model_name in ['fc', 'cnn', 'chencnn', 'sharedcnn'], "Invalid model name '{}'".format(model)
     with sess.as_default():
         with tf.variable_scope('outputs'):
             # model    
             if args.model == 'fc':
-                y_hat, model_summary_nodes = simple_fc(x, args.layers)
-            elif args.model == 'cnn':
-                y_hat, model_summary_nodes = simple_cnn(x, args.layers)
-            elif args.model == 'chencnn':
-                y_hat, model_summary_nodes = chen_cnn(x)
-            elif args.model == 'sharedcnn':
-                y_hat, model_summary_nodes = shared_cnn(x)
-            y_hat = tf.identity(y_hat, name='y_hat')
-        model_summary_nodes = tf.summary.merge([model_summary_nodes, tf.summary.image('model_output', y_hat * 255.0)])
+                model = SimpleFC(x, args.layers)
+            elif model_name == 'cnn':
+                model = SimpleCNN(x, args.layers)            
+            elif model_name == 'chencnn':
+                model = ChenCNN(x)
+            y_hat = tf.identity(model.output, name='y_hat')
+        model_summary_nodes = tf.summary.merge([model.summary_nodes, tf.summary.image('model_output', y_hat * 255.0)])
         
     return y_hat, model_summary_nodes
 
@@ -207,7 +205,6 @@ if __name__ == '__main__':
     saver = tf.train.Saver(max_to_keep=None)
     if not args.resume:
         # save_model_and_settings(sess, args)
-        
         pickle.dump(args, open(os.path.join(args.dir, 'settings'), 'wb'))
         tf.train.export_meta_graph(os.path.join(args.dir, 'model'))
         sess.run(tf.global_variables_initializer())
@@ -224,7 +221,7 @@ if __name__ == '__main__':
 
 
     # dataset
-    print('Loading dataset...')
+    debug('Loading dataset...')
     data = get_dataset(args.dataset)
     # example data for visualizing results/progress
     sample_indexes = np.random.choice(data.test.images.shape[0], args.examples, replace=False)
@@ -232,7 +229,7 @@ if __name__ == '__main__':
 
 
     # training!
-    print('Starting training')
+    debug('Starting training')
     start_epoch = sess.run(global_epoch) + 1
     n_trbatches = int(data.train.num_examples/args.batchsize)
     n_valbatches = int(data.validation.num_examples/args.batchsize)
@@ -247,19 +244,14 @@ if __name__ == '__main__':
 
         # perform training
         ###############################################
-        total_train_loss = 0.0
         for i in range(n_trbatches):
             # run train step
             xs, ys = data.train.next_batch(args.batchsize)
             _, l = sess.run([train_step, loss], feed_dict={x_input: xs})
         
-            # update metrics
-            total_train_loss += l
-            iterations_completed += args.batchsize
-        
             # log and print progress
             log_files['train_loss'].write('{:05d},{:.5f}\n'.format(iterations_completed, l))
-            print_progress(epoch, iterations_completed, data.train.num_examples, l, epoch_start_time)
+            print_progress(epoch, args.batchsize * (i+1), data.train.num_examples, l, epoch_start_time)
         
             # run batch summary nodes
             if batch_summary_nodes is not None:
@@ -281,10 +273,9 @@ if __name__ == '__main__':
 
             
         # snapshot
-        stdout.write('Writing snapshot to disk...')
+        stdout.write('\tWriting snapshot to disk...')
         chkfile = os.path.join(args.dir, 'checkpoints', 'epoch_{:03d}.ckpt'.format(epoch))
         saver.save(sess, chkfile, global_step=global_step)
-        epoch_end_time = time.time()
         stdout.write('complete!\r\n')
         stdout.flush()
 
@@ -293,12 +284,14 @@ if __name__ == '__main__':
         sess.run(global_epoch.assign(epoch+1))
 
         
+
+        
     # training completed!
-    print('Training completed')
+    debug('Training completed')
 
 
     # perform test
-    print('Starting testing')
+    debug('Starting testing')
     results = fold([loss], data.test, args.batchsize, n_testbatches)
     # log and print progress
     log_files['test_loss'].write('{:05d},{:.5f}\n'.format(iterations_completed, results[0]))
