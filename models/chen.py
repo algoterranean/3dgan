@@ -2,6 +2,8 @@ import tensorflow as tf
 # from functools import
 from .model import Model
 
+
+
 class ChenCNN(Model):
     def __init__(self, x):
         Model.__init__(self, x)

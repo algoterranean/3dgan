@@ -6,15 +6,16 @@ import sys
 import cv2
 import shutil
 import time
+import pickle 
 # local
 from data import Floorplans
 
 
 
-def print_progress(epoch, completed, total, loss, start_time):
+def print_progress(epoch, completed, total, loss, gl, ll, start_time):
     end_time = time.time()
     sys.stdout.write('\r')
-    sys.stdout.write('Epoch {:03d}: {:05d}/{:05d}: {:.4f} ({:d}s)'.format(epoch, completed, total, loss, int(end_time - start_time)))
+    sys.stdout.write('Epoch {:03d}: {:05d}/{:05d}: loss: {:.4f} gen loss: {:.4f} latent loss: {:.4f} ({:d}s)'.format(epoch, completed, total, loss, gl, ll, int(end_time - start_time)))
     sys.stdout.flush()
 
 
@@ -66,3 +67,22 @@ def debug(*args):
 
 
     
+def fold(sess, x_input, ops, data, batch_size, num_batches):
+    """Runs each op on the data in batches and returns the average value for each op."""
+    start_time = time.time()
+    total_values = [0.0 for x in ops]
+    for i in range(num_batches):
+        xs, ys = data.next_batch(batch_size)
+        results = sess.run(ops, feed_dict={x_input: xs})
+        for j in range(len(results)):
+            total_values[j] += results[j]
+    end_time = time.time()
+    avg_values = [x/num_batches for x in total_values]
+    return avg_values
+
+
+def save_settings(sess, args):
+    """Writes settings and model graph to disk."""
+    with sess.as_default():
+        pickle.dump(args, open(os.path.join(args.dir, 'settings'), 'wb'))
+        tf.train.export_meta_graph(os.path.join(args.dir, 'model'))

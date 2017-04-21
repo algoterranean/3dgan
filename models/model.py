@@ -2,11 +2,46 @@ import tensorflow as tf
 
 
 class Model:
+    def __init__(self):
+        self._encoder_node = None
+        self._decoder_node = None
+        self._latent_node = None
+        self._train_op = None
+        self._latent_loss_node = None
 
-    def __init__(self, x):
-        self.output = None
-        self.summary_nodes = []
-        self._build_graph(x)
+    @property
+    def encoder(self):
+        return self._encoder_node
 
-    def _add_summary(self, node, name):
-        self.summary_nodes.append(tf.summary.histogram(name, node))        
+    @property
+    def decoder(self):
+        return self._decoder_node
+
+    @property
+    def latent(self):
+        return self._latent_node
+
+    @property
+    def loss(self):
+        return self._loss_node
+
+    @property
+    def latent_loss(self):
+        return self._latent_loss_node
+
+    @property
+    def generated_loss(self):
+        return self._generated_loss_node
+
+    # @property
+    # def train_op(self):
+    #     return self._train_op
+
+
+
+
+    
+
+    
+        
+        

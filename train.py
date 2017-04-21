@@ -6,16 +6,17 @@ import random
 import argparse
 import os
 import uuid
-import pickle
+import pickle 
 import h5py
 import cv2
 import time
 from sys import stdout
+from os import path
 # local
-from models.fc import SimpleFC
-from models.conv import SimpleCNN
-from models.chen import ChenCNN
-# from models import fc.simple_fc, simple_cnn, chen_cnn, shared_cnn
+# from models.fc import SimpleFC
+# from models.conv import SimpleCNN
+# from models.chen import ChenCNN
+from models.vae import VariationalAutoEncoder
 from msssim import MultiScaleSSIM, tf_ssim, tf_ms_ssim
 from data import Floorplans
 from util import *
@@ -45,7 +46,6 @@ def init_input(sess, dataset, grayscale=False):
         # x_input is the tensor for our actual data
         # x is the tensor to be passed to the model (that is, after processing of actual data)
         # TODO: move this to Dataset class or something. dataset should be self-describing
-        assert dataset in ['mnist', 'floorplans'], "Invalid dataset name '{}'".format(dataset)
         with tf.variable_scope('inputs'):
             if dataset == 'mnist':
                 x_input = tf.placeholder("float", [None, 784], name='x_input')
@@ -58,21 +58,25 @@ def init_input(sess, dataset, grayscale=False):
     return x, x_input
 
 
-def init_model(sess, model_name):
-    assert model_name in ['fc', 'cnn', 'chencnn', 'sharedcnn'], "Invalid model name '{}'".format(model)
+def init_model(sess, x, model_name): #, optimizer, global_step):
     with sess.as_default():
         with tf.variable_scope('outputs'):
-            # model    
-            if args.model == 'fc':
-                model = SimpleFC(x, args.layers)
-            elif model_name == 'cnn':
-                model = SimpleCNN(x, args.layers)            
-            elif model_name == 'chencnn':
-                model = ChenCNN(x)
-            y_hat = tf.identity(model.output, name='y_hat')
-        model_summary_nodes = tf.summary.merge([model.summary_nodes, tf.summary.image('model_output', y_hat * 255.0)])
+            return VariationalAutoEncoder(x) #, optimizer, global_step)
+            # # model    
+            # if args.model == 'fc':
+            #     model = SimpleFC(x, args.layers)
+            # elif model_name == 'cnn':
+            #     model = SimpleCNN(x, args.layers)            
+            # elif model_name == 'chencnn':
+            #     model = ChenCNN(x)
+            # elif model_name == 'vae':
+            #     model = VAE(x)
+    # return model
+
+    #         y_hat = tf.identity(model.output, name='y_hat')
+    #     model_summary_nodes = tf.summary.merge([model.summary_nodes, tf.summary.image('model_output', y_hat * 255.0)])
         
-    return y_hat, model_summary_nodes
+    # return y_hat, model_summary_nodes
 
 
 def init_loss(sess):
@@ -103,26 +107,12 @@ def init_optimizer(args):
 
 def init_tensorboard(sess, dir, model_summary, loss_functions):
     with sess.as_default():
-        tb_writer = tf.summary.FileWriter(os.path.join(dir, 'logs'), graph=tf.get_default_graph())
+        tb_writer = tf.summary.FileWriter(path.join(dir, 'logs'), graph=tf.get_default_graph())
         epoch_summary_nodes = tf.summary.merge([model_summary])
         batch_summary_nodes = tf.summary.merge([tf.summary.scalar(k, v) for k, v in loss_functions.items()])
         train_start_summary_nodes = None
         train_end_summary_nodes = None
     return tb_writer, batch_summary_nodes, epoch_summary_nodes, train_start_summary_nodes, train_end_summary_nodes
-
-
-def fold(ops, data, batch_size, num_batches):
-    start_time = time.time()
-    total_values = [0.0 for x in ops]
-    for i in range(num_batches):
-        xs, ys = data.next_batch(batch_size)
-        results = sess.run(ops, feed_dict={x_input: xs})
-        for j in range(len(results)):
-            total_values[j] += results[j]
-    end_time = time.time()
-    avg_values = [x/num_batches for x in total_values]
-    return avg_values
-
 
 
 
@@ -140,7 +130,6 @@ if __name__ == '__main__':
     parser.add_argument('--shuffle', default=False, action='store_true')
     parser.add_argument('--dir', type=str, default='workspace/{}'.format(uuid.uuid4()))
     parser.add_argument('--resume', default=False, action='store_true')
-    # parser.add_argument('--interactive', default=False, action='store_true')
     parser.add_argument('--model', type=lambda s: s.lower(), default='fc')
     parser.add_argument('--grayscale', default=False, action='store_true')
     parser.add_argument('--loss', type=lambda s: s.lower(), default='l1')
@@ -155,34 +144,41 @@ if __name__ == '__main__':
         # copy passed-in values
         args_copy = argparse.Namespace(**vars(args))
         # load previous args
-        args = pickle.load(open(os.path.join(args.dir, 'settings'), 'rb'))
+        args = pickle.load(open(path.join(args.dir, 'settings'), 'rb'))
         # adjust for new passed in values
         args.resume = True
         args.epochs = args_copy.epochs
         print('Args restored')
     
-    
+
+    ######################################################################
     # init session, seed
     sess = init_session(args.seed)
 
     # init globals
     global_step, global_epoch, global_batchsize = init_globals(sess)
 
+
+
     # setup input nodes (including any image filters)
     x, x_input = init_input(sess, args.dataset, grayscale=args.grayscale)
 
     # setup model
-    y_hat, model_summary_nodes = init_model(sess, args.model)
-
-    # loss
-    loss_functions = init_loss(sess)
-    loss = loss_functions[args.loss]
+    with tf.variable_scope('outputs'):    
+        model = init_model(sess, x, args.model) #, optimizer, global_step)
+        y_hat = tf.identity(model.decoder, name='y_hat')
+    model_summary_nodes = tf.summary.merge([tf.summary.image('decoder', y_hat)])
+    # model_summary_nodes = tf.summary.merge([model.summary_nodes, tf.summary.image('model_output', y_hat * 255.0)])
 
     # optimizer
     optimizer = init_optimizer(args)
 
-    # training step
-    train_step = optimizer.minimize(loss, global_step=global_step)
+    # loss
+    loss_functions = init_loss(sess)
+    # loss = loss_functions[args.loss]
+
+    loss = model.loss
+    train_op = optimizer.minimize(model.loss)
         
     # workspace
     log_files = prep_workspace(args.dir)
@@ -191,43 +187,27 @@ if __name__ == '__main__':
     tb_writer, batch_summary_nodes, epoch_summary_nodes, \
       train_start_summary_nodes, train_end_summary_nodes = init_tensorboard(sess, args.dir, model_summary_nodes, loss_functions)
 
-
-    # def save_model_and_settings(sess, args):
-    #     with sess.as_default():
-    #         pickle.dump(args, open(os.path.join(args.dir, 'settings'), 'wb'))
-    #         tf.train.export_meta_graph(os.path.join(args.dir, 'model'))
-    #         sess.run(tf.global_variables_initializer())
-
-    # def restore_model(sess, dir):
-        
-      
     # session saving/loading
     saver = tf.train.Saver(max_to_keep=None)
-    if not args.resume:
-        # save_model_and_settings(sess, args)
-        pickle.dump(args, open(os.path.join(args.dir, 'settings'), 'wb'))
-        tf.train.export_meta_graph(os.path.join(args.dir, 'model'))
-        sess.run(tf.global_variables_initializer())
-    else:
-        #saver = tf.train.import_meta_graph(os.path.join(args.dir, 'model'))
-        sess.run(tf.global_variables_initializer())
-        saver.restore(sess, tf.train.latest_checkpoint(os.path.join(args.dir, 'checkpoints')))
+    sess.run(tf.global_variables_initializer())
+    if args.resume:
+        saver.restore(sess, tf.train.latest_checkpoint(path.join(args.dir, 'checkpoints')))
         print('Model restored. Currently at step {} and epoch {} with batch size {}'.format(sess.run(global_step), sess.run(global_epoch), sess.run(global_batchsize)))
-    
-        
+    else:
+        save_settings(sess, args)
+
     # print out schematic/visualization of model
     total_params = visualize_parameters()
     print('Total params: {}'.format(total_params))
-
 
     # dataset
     debug('Loading dataset...')
     data = get_dataset(args.dataset)
     # example data for visualizing results/progress
-    sample_indexes = np.random.choice(data.test.images.shape[0], args.examples, replace=False)
+    sample_indexes = np.random.choice(data.test.images.shape[0], args.batchsize, replace=False)
     example_images = data.test.images[sample_indexes, :]
 
-
+    ######################################################################
     # training!
     debug('Starting training')
     start_epoch = sess.run(global_epoch) + 1
@@ -243,56 +223,48 @@ if __name__ == '__main__':
             data.train.shuffle()        
 
         # perform training
-        ###############################################
         for i in range(n_trbatches):
             # run train step
             xs, ys = data.train.next_batch(args.batchsize)
-            _, l = sess.run([train_step, loss], feed_dict={x_input: xs})
+            _, l, gl, ll = sess.run([train_op, loss, model.generated_loss, model.latent_loss], feed_dict={x_input: xs})
+            iterations_completed += args.batchsize
+            # print(l, gl, ll)
         
             # log and print progress
             log_files['train_loss'].write('{:05d},{:.5f}\n'.format(iterations_completed, l))
-            print_progress(epoch, args.batchsize * (i+1), data.train.num_examples, l, epoch_start_time)
+            print_progress(epoch, args.batchsize * (i+1), data.train.num_examples, l, gl, ll, epoch_start_time)
         
             # run batch summary nodes
             if batch_summary_nodes is not None:
                 summary_result = sess.run(batch_summary_nodes, feed_dict={x_input: xs})
                 tb_writer.add_summary(summary_result, iterations_completed)
-    
             
         # perform validation
-        results = fold([loss], data.validation, args.batchsize, n_valbatches)
+        results = fold(sess, x_input, [loss], data.validation, args.batchsize, n_valbatches)
         # log and print progress
         log_files['validate_loss'].write('{:05d},{:.5f}\n'.format(iterations_completed, results[0]))
         stdout.write(', validation: {:.4f}\r\n'.format(results[0]))
 
-    
         # run epoch summary nodes
         if epoch_summary_nodes is not None:
             summary_result = sess.run(epoch_summary_nodes, feed_dict={x_input: example_images})
             tb_writer.add_summary(summary_result, epoch)
-
             
         # snapshot
         stdout.write('\tWriting snapshot to disk...')
-        chkfile = os.path.join(args.dir, 'checkpoints', 'epoch_{:03d}.ckpt'.format(epoch))
+        chkfile = path.join(args.dir, 'checkpoints', 'epoch_{:03d}.ckpt'.format(epoch))
         saver.save(sess, chkfile, global_step=global_step)
         stdout.write('complete!\r\n')
         stdout.flush()
 
-        
         # keep track of current epoch in global vars
         sess.run(global_epoch.assign(epoch+1))
 
         
-
-        
-    # training completed!
+    # training completed, perform test
     debug('Training completed')
-
-
-    # perform test
     debug('Starting testing')
-    results = fold([loss], data.test, args.batchsize, n_testbatches)
+    results = fold(sess, x_input, [loss], data.test, args.batchsize, n_testbatches)
     # log and print progress
     log_files['test_loss'].write('{:05d},{:.5f}\n'.format(iterations_completed, results[0]))
     stdout.write('Test loss: {:.4f}\r\n'.format(results[0]))

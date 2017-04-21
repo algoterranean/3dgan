@@ -115,6 +115,8 @@ def visualize_activations(layer, input):
     graph = tf.get_default_graph()
     x_input = graph.as_graph_element('inputs/x_input').outputs[0]
     activations = sess.run(layer, feed_dict={x_input: input})
+    print('layer:', layer)
+    print('activations:', activations.shape)
 
     image_list = []
     for f_idx in range(activations.shape[-1]):
