@@ -21,23 +21,28 @@ from util import *
 # utility/helper functions
 
 
-
-def stitch_montage(image_list, add_border=True, use_width=0, color=(255.0, 0, 0)):
+# colors are in (r,g,b) format, from [0, 1]
+def stitch_montage(image_list, add_border=True, use_width=0, color=(0, 0, 0)):
     """Stitch a list of equally-shaped images into a single image."""
     num_images = len(image_list)
     montage_w = use_width if use_width > 0 else ceil(sqrt(num_images))
     montage_h = int(num_images/montage_w)
     ishape = image_list[0].shape
-    # black borders
+    
+    # colored borders
     v_border = np.zeros((ishape[0], 1, ishape[-1]))
     h_border = np.zeros((1, (ishape[1]+1) * montage_w + 1, ishape[-1]))
-    
+    for a in [v_border, h_border]:
+        a[:, :, 0].fill(color[2] * 255.0)
+        a[:, :, 1].fill(color[1] * 255.0)
+        a[:, :, 2].fill(color[0] * 255.0)
+        
 
     montage = list(chunks(image_list, montage_w))
     # fill in any remaining missing images in square montage
     remaining = montage_w - (num_images - montage_w * montage_h)
+    # add images
     if remaining < montage_w:
-        # dummy_shape = weights[:,:,:,0].shape if rgb else np.expand_dims(weights[:,:,0,0], 2).shape
         for _ in range(remaining):
             montage[-1].append(np.zeros(ishape))
 
@@ -124,17 +129,6 @@ def visualize_weights(var):
 
 def visualize_all_weights(weights):
     return [visualize_weights(var) for var in weights]
-
-
-def checkpoints(workspace_dir, only_recent=False):
-    checkpoint_files = []
-    for f in os.listdir(os.path.join(workspace_dir, 'checkpoints')):
-        if f.endswith('.meta'):
-            checkpoint_files.append(f[:f.rfind('.')])
-    checkpoint_files.sort()
-    if only_recent:
-        return [checkpoint_files[-1]]
-    return checkpoint_files
 
 
 def visualize_timelapse(workspace_dir, example_images, grayscale=False, every=1):
@@ -312,10 +306,10 @@ if __name__ == '__main__':
         results = visualize_samples(args.dir, only_recent=True)
         image_path = os.path.join(args.dir, 'images', 'samples_most_recent.png')
         cv2.imwrite(image_path, results)
-        # # generate timelapse of all checkpoints
-        # results = visualize_samples(args.dir, only_recent=False)
-        # image_path = os.path.join(args.dir, 'images', 'samples.png')
-        # cv2.imwrite(image_path, results)
+        # generate timelapse of all checkpoints
+        results = visualize_samples(args.dir, only_recent=False)
+        image_path = os.path.join(args.dir, 'images', 'samples.png')
+        cv2.imwrite(image_path, results)
         
 
 

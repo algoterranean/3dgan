@@ -121,3 +121,14 @@ def chunks(l, n):
     """Yield successive n-sized chunks from l."""
     for i in range(0, len(l), n):
         yield l[i:i + n]
+
+
+def checkpoints(workspace_dir, only_recent=False):
+    checkpoint_files = []
+    for f in os.listdir(os.path.join(workspace_dir, 'checkpoints')):
+        if f.endswith('.meta'):
+            checkpoint_files.append(f[:f.rfind('.')])
+    checkpoint_files.sort()
+    if only_recent:
+        return [checkpoint_files[-1]]
+    return checkpoint_files
