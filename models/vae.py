@@ -1,4 +1,5 @@
 import tensorflow as tf
+import numpy as np
 from .model import Model
 from .ops import dense, conv2d, deconv2d, lrelu, flatten, L
 
@@ -6,7 +7,7 @@ from .ops import dense, conv2d, deconv2d, lrelu, flatten, L
 
 class VariationalAutoEncoder(Model):
     def __init__(self, x): # optimizer):
-        self.latent_size = 200
+        self.latent_size = 512
         self.batch_size = 256
         
         # encoder
@@ -15,6 +16,7 @@ class VariationalAutoEncoder(Model):
         z_mean, z_stddev = self._build_latent(self._encoder_node)
         samples = tf.random_normal([self.batch_size, self.latent_size], 0, 1, dtype=tf.float32)
         self._latent_node = z_mean + (z_stddev * samples)  # sampling of latent_size gaussians based on z_mean, z_stddev
+        tf.identity(self._latent_node, name='sample')
         # decoder
         self._decoder_node = self._build_decoder(self._latent_node)
 
@@ -24,13 +26,20 @@ class VariationalAutoEncoder(Model):
         self._generated_loss_node = tf.reduce_sum(generated_loss)
         self._latent_loss_node = tf.reduce_sum(latent_loss)
         self._loss_node = tf.reduce_mean(generated_loss + latent_loss)
+
+
+    def sample(self, sess):
+        sampled_mu = np.random.normal(self.latent_size)
+        results = sess.run(self._decoder_node, feed_dict={self._latent_node: sampled_mu})
+        print("RESULTS")
+        print(results)
         
 
         
     def _build_encoder(self, x):
         # layer_sizes = [64, 128, 256, 256, 96, 32] 
         with tf.variable_scope('encoder'):
-            x = lrelu(conv2d(x, 1, 64, 5, 2))       ; L(x)
+            x = lrelu(conv2d(x, 3, 64, 5, 2))       ; L(x)
             x = lrelu(conv2d(x, 64, 128, 5, 2))     ; L(x)
             x = lrelu(conv2d(x, 128, 256, 5, 2))    ; L(x)
             x = lrelu(conv2d(x, 256, 256, 5, 2))    ; L(x)
@@ -58,7 +67,8 @@ class VariationalAutoEncoder(Model):
             x = tf.nn.relu(deconv2d(x, 256, 256, 5, 2))  ; L(x)
             x = tf.nn.relu(deconv2d(x, 256, 128, 5, 2))  ; L(x)
             x = tf.nn.relu(deconv2d(x, 128, 64, 5, 2))   ; L(x)
-            x = tf.nn.sigmoid(deconv2d(x, 64, 1, 5, 2))  ; L(x)
+            x = tf.nn.sigmoid(deconv2d(x, 64, 3, 5, 2))  ; L(x)
+            tf.identity(x, name='sample')
         return x
 
     

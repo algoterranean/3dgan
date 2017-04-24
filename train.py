@@ -60,8 +60,7 @@ def init_input(sess, dataset, grayscale=False):
 
 def init_model(sess, x, model_name): #, optimizer, global_step):
     with sess.as_default():
-        with tf.variable_scope('outputs'):
-            return VariationalAutoEncoder(x) #, optimizer, global_step)
+        return VariationalAutoEncoder(x) #, optimizer, global_step)
             # # model    
             # if args.model == 'fc':
             #     model = SimpleFC(x, args.layers)
@@ -238,6 +237,7 @@ if __name__ == '__main__':
             if batch_summary_nodes is not None:
                 summary_result = sess.run(batch_summary_nodes, feed_dict={x_input: xs})
                 tb_writer.add_summary(summary_result, iterations_completed)
+
             
         # perform validation
         results = fold(sess, x_input, [loss], data.validation, args.batchsize, n_valbatches)
@@ -256,6 +256,9 @@ if __name__ == '__main__':
         saver.save(sess, chkfile, global_step=global_step)
         stdout.write('complete!\r\n')
         stdout.flush()
+
+        # # perform sampling
+        # model.sample(sess)
 
         # keep track of current epoch in global vars
         sess.run(global_epoch.assign(epoch+1))

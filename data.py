@@ -46,3 +46,13 @@ class Floorplans:
         self.test = Dataset(self.file['test/images'])
         self.train = Dataset(self.file['train/images'])
         self.validation = Dataset(self.file['validation/images'])
+
+
+
+if __name__ == '__main__':
+    f = Floorplans()
+    print('Train size:', len(f.train.images))    
+    print('Test size:', len(f.test.images))
+    print('Validation size:', len(f.validation.images))
+
+    

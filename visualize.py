@@ -55,7 +55,7 @@ def chunks(l, n):
         yield l[i:i + n]
 
 
-def stitch_montage(image_list, add_border=True, use_width=0):
+def stitch_montage(image_list, add_border=True, use_width=0, color=(255.0, 0, 0)):
     """Stitch a list of equally-shaped images into a single image."""
     num_images = len(image_list)
     if use_width > 0:
@@ -67,6 +67,8 @@ def stitch_montage(image_list, add_border=True, use_width=0):
     # black borders
     v_border = np.zeros((ishape[0], 1, ishape[-1]))
     h_border = np.zeros((1, (ishape[1]+1) * montage_w + 1, ishape[-1]))
+    
+
 
     montage = list(chunks(image_list, montage_w))
     # fill in any remaining missing images in square montage
@@ -76,9 +78,20 @@ def stitch_montage(image_list, add_border=True, use_width=0):
         for _ in range(remaining):
             montage[-1].append(np.zeros(ishape))
 
+    # shapes = []
+    # for row in montage:
+    #     for a in row:
+    #         shapes.append(a.shape)
+    # print(shapes)
+
+    # for i in range(len(montage)):  
+    #     for j in range(len(montage[i])):
+    #         montage[i][j] = np.squeeze(montage[i][j])
+            
+
     if add_border:
         b = [v_border for x in range(len(montage[0]))]
-        c = [h_border for x in range(len(montage))]        
+        c = [h_border for x in range(len(montage))]
         return np.concatenate(list(chain(*zip(c, [np.concatenate(list(chain(*zip(b, row))) + [v_border], axis=1) for row in montage]))) + [h_border], axis=0)
     else:
         return np.concatenate([np.concatenate(row, axis=1) for row in montage], axis=0)
@@ -119,9 +132,18 @@ def visualize_activations(layer, input):
     print('activations:', activations.shape)
 
     image_list = []
-    for f_idx in range(activations.shape[-1]):
-        f = activations[0,:,:,f_idx] * 255.0
-        image_list.append(np.expand_dims(f, 2))
+    if len(activations.shape) > 2:
+        for f_idx in range(activations.shape[-1]):
+            f = activations[0,:,:,f_idx] * 255.0
+            # a = activations[0,:,:,f_idx]
+            # print(np.max(a), np.min(a), np.mean(a))
+            image_list.append(np.expand_dims(f, 2))
+    else:
+        # TODO how to represent this in an image?
+        print(activations)
+        # a = activations
+        # print(np.max(a), np.min(a), np.mean(a))
+
     return stitch_montage(image_list)
 
 
@@ -151,25 +173,73 @@ def visualize_all_weights(weights):
     return [visualize_weights(var) for var in weights]
 
 
-def visualize_timelapse(workspace_dir, example_images):
-    # get list of checkpoint files in order
+def checkpoints(workspace_dir):
     checkpoint_files = []
     for f in os.listdir(os.path.join(workspace_dir, 'checkpoints')):
         if f.endswith('.meta'):
             checkpoint_files.append(f[:f.rfind('.')])
     checkpoint_files.sort()
+    return checkpoint_files
 
-    montage = [x*255.0 for x in example_images]
+
+def visualize_timelapse(workspace_dir, example_images, grayscale=False, every=1):
+    # get list of checkpoint files in order
+    checkpoint_files = checkpoints(workspace_dir)
+    # checkpoint_files = []
+    # for f in os.listdir(os.path.join(workspace_dir, 'checkpoints')):
+    #     if f.endswith('.meta'):
+    #         checkpoint_files.append(f[:f.rfind('.')])
+    # checkpoint_files.sort()
+
+    if grayscale:
+        montage = []
+        # montage = [cv2.cvtColor(x, cv2.COLOR_BGR2GRAY) * 255.0 for x in example_images]
+    else:
+        montage = [x*255.0 for x in example_images]
+
+    i = 0
+    for f in checkpoint_files:
+        if i % every == 0:
+            sess = reload_session(workspace_dir, os.path.join(workspace_dir, 'checkpoints', f))
+            graph = tf.get_default_graph()
+            x_input = graph.as_graph_element('inputs/x_input').outputs[0]
+            y_hat = graph.as_graph_element('outputs/y_hat').outputs[0]
+        
+            results = sess.run(y_hat, feed_dict={x_input: example_images})
+            for r in results:
+                montage.append(r * 255.0)
+        i += 1
+    return stitch_montage(montage, use_width=len(example_images)) #args.examples)
+
+
+def visualize_entanglement(workspace_dir):
+    sess = reload_session(args.dir)
+    graph = tf.get_default_graph()
+    sampled_mu = np.random.normal(0, 2.2, (1))[0]
+    print('sampled mu:', sampled_mu)
+
+
+def visualize_samples(workspace_dir, only_recent=False):
+    checkpoint_files = checkpoints(workspace_dir)
+    i = 0
+    montage = []
+    sampled_mu = np.random.normal(0, 2.2, (256, 512)) # TODO: size    
     for f in checkpoint_files:
         sess = reload_session(workspace_dir, os.path.join(workspace_dir, 'checkpoints', f))
         graph = tf.get_default_graph()
-        x_input = graph.as_graph_element('inputs/x_input').outputs[0]
-        y_hat = graph.as_graph_element('outputs/y_hat').outputs[0]
-        
-        results = sess.run(y_hat, feed_dict={x_input: example_images})
+        output = graph.as_graph_element('outputs/decoder/sample').outputs[0]
+        latent = graph.as_graph_element('outputs/sample').inputs[0]
+        # sampled_mu = np.random.normal(0, 0.1, (256, 512)) # TODO: size
+        results = sess.run(output, feed_dict={latent: sampled_mu})
         for r in results:
+            # print(np.max(r), np.min(r), np.mean(r))
             montage.append(r * 255.0)
-    return stitch_montage(montage, use_width=len(example_images)) #args.examples)
+        # image_fn = os.path.join(workspace_dir, 'images', 'samples', 'sample_' + str(i) + '.jpg')
+        # cv2.imwrite(image_fn, stitch_montage(results))
+        i += 1
+    return stitch_montage(montage,  use_width=256)
+
+    
 
 
 # visualize image that most activates a filter via gradient ascent
@@ -239,6 +309,9 @@ if __name__ == '__main__':
     parser.add_argument('--timelapse', default=False, action='store_true')
     parser.add_argument('--weights', default=False, action='store_true')
     parser.add_argument('--bestfit', default=False, action='store_true')
+    parser.add_argument('--grayscale', default=False, action='store_true')
+    parser.add_argument('--sample', default=False, action='store_true')
+    parser.add_argument('--entangle', default=False, action='store_true')    
     args = parser.parse_args()
 
     # plot loss
@@ -254,6 +327,11 @@ if __name__ == '__main__':
     data = get_dataset(args.data)
     sample_indexes = np.random.choice(data.test.images.shape[0], args.examples, replace=False)
     example_images = data.test.images[sample_indexes, :]
+    # if args.grayscale:
+    #     ex2 = np.array([args.examples, example_images[0][1], example_images[0][2]])
+    #     for i in range(args.examples):
+    #         ex2[i] = cv2.cvtColor(np.squeeze(example_images[i]), cv2.COLOR_BGR2GRAY)
+    #     example_images = ex2
     print('Loading model and checkpoint..')
     sess = reload_session(args.dir)        
 
@@ -272,7 +350,7 @@ if __name__ == '__main__':
         cv2.imwrite(image_path, example * 255.0)
         
     # weights and bestfit
-    for d in ['weights', 'bestfit']:
+    for d in ['weights', 'bestfit', 'samples']:
         p = os.path.join(args.dir, 'images', d)
         if not os.path.exists(p):
             os.makedirs(p)
@@ -280,6 +358,22 @@ if __name__ == '__main__':
 
     ################################################
     # generate visualizations!
+
+    # latent samples
+    if args.sample or args.all:
+        print('Generating samples...')
+        results = visualize_samples(args.dir)
+        image_path = os.path.join(args.dir, 'images', 'samples.png')
+        cv2.imwrite(image_path, results)
+        # results = stitch_montage(results)
+        # for i in range(len(results)):
+            
+        #     cv2.imwrite(image_path, results[i] * 255.0)
+
+
+    if args.entangle or args.all:
+        results = visualize_entanglement(args.dir)
+            
     
     # activations
     # TODO: add timelapse for each checkpoint
@@ -298,7 +392,7 @@ if __name__ == '__main__':
     # example timelapse
     if args.timelapse or args.all:
         print('Generating timelapse...')
-        results = visualize_timelapse(args.dir, example_images)
+        results = visualize_timelapse(args.dir, example_images, args.grayscale, every=40)
         cv2.imwrite(os.path.join(args.dir, 'images', 'timelapse.png'), results)
         # reset session to most recent checkpoint
         sess = reload_session(args.dir)
