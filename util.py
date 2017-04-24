@@ -86,3 +86,38 @@ def save_settings(sess, args):
     with sess.as_default():
         pickle.dump(args, open(os.path.join(args.dir, 'settings'), 'wb'))
         tf.train.export_meta_graph(os.path.join(args.dir, 'model'))
+
+
+        
+def reload_session(dir, fn=None):
+    tf.reset_default_graph()
+    sess = tf.Session()
+    saver = tf.train.import_meta_graph(os.path.join(dir, 'model'))
+    if fn is None:
+        chk_file = tf.train.latest_checkpoint(os.path.join(dir, 'checkpoints'))
+    else:
+        chk_file = fn
+    saver.restore(sess, chk_file)
+    return sess
+
+
+# util function to convert a tensor into a valid image
+def deprocess_image(x):
+    # normalize tensor: center on 0., ensure std is 0.1
+    x -= x.mean()
+    x /= (x.std() + 1e-5)
+    x *= 0.1
+    # clip to [0, 1]
+    x += 0.5
+    x = np.clip(x, 0, 1)
+    # convert to RGB array
+    x *= 255
+    x = np.clip(x, 0, 255).astype('uint8')
+    return x
+
+
+# usage: list(chunks(some_list, chunk_size)) ==> list of lists of that size
+def chunks(l, n):
+    """Yield successive n-sized chunks from l."""
+    for i in range(0, len(l), n):
+        yield l[i:i + n]

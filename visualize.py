@@ -20,55 +20,18 @@ from util import *
 ################################################
 # utility/helper functions
 
-def reload_session(dir, fn=None):
-    tf.reset_default_graph()
-    sess = tf.Session()
-    saver = tf.train.import_meta_graph(os.path.join(dir, 'model'))
-    if fn is None:
-        chk_file = tf.train.latest_checkpoint(os.path.join(dir, 'checkpoints'))
-    else:
-        chk_file = fn
-    # print('latest checkpoint:', latest)
-    saver.restore(sess, chk_file)
-    return sess
-
-
-# util function to convert a tensor into a valid image
-def deprocess_image(x):
-    # normalize tensor: center on 0., ensure std is 0.1
-    x -= x.mean()
-    x /= (x.std() + 1e-5)
-    x *= 0.1
-    # clip to [0, 1]
-    x += 0.5
-    x = np.clip(x, 0, 1)
-    # convert to RGB array
-    x *= 255
-    x = np.clip(x, 0, 255).astype('uint8')
-    return x
-
-
-# usage: list(chunks(some_list, chunk_size)) ==> list of lists of that size
-def chunks(l, n):
-    """Yield successive n-sized chunks from l."""
-    for i in range(0, len(l), n):
-        yield l[i:i + n]
 
 
 def stitch_montage(image_list, add_border=True, use_width=0, color=(255.0, 0, 0)):
     """Stitch a list of equally-shaped images into a single image."""
     num_images = len(image_list)
-    if use_width > 0:
-        montage_w = use_width
-    else:
-        montage_w = ceil(sqrt(num_images))
+    montage_w = use_width if use_width > 0 else ceil(sqrt(num_images))
     montage_h = int(num_images/montage_w)
     ishape = image_list[0].shape
     # black borders
     v_border = np.zeros((ishape[0], 1, ishape[-1]))
     h_border = np.zeros((1, (ishape[1]+1) * montage_w + 1, ishape[-1]))
     
-
 
     montage = list(chunks(image_list, montage_w))
     # fill in any remaining missing images in square montage
@@ -77,17 +40,6 @@ def stitch_montage(image_list, add_border=True, use_width=0, color=(255.0, 0, 0)
         # dummy_shape = weights[:,:,:,0].shape if rgb else np.expand_dims(weights[:,:,0,0], 2).shape
         for _ in range(remaining):
             montage[-1].append(np.zeros(ishape))
-
-    # shapes = []
-    # for row in montage:
-    #     for a in row:
-    #         shapes.append(a.shape)
-    # print(shapes)
-
-    # for i in range(len(montage)):  
-    #     for j in range(len(montage[i])):
-    #         montage[i][j] = np.squeeze(montage[i][j])
-            
 
     if add_border:
         b = [v_border for x in range(len(montage[0]))]
@@ -101,7 +53,7 @@ def stitch_montage(image_list, add_border=True, use_width=0, color=(255.0, 0, 0)
 ################################################
 # visualization functions
 
-
+# TODO improve the graphing of loss so that longer training sessions can be better visualized
 def visualize_loss(dir):
     log_dir = os.path.join(dir, 'logs')
     train_loss_csv = np.genfromtxt(os.path.join(log_dir, 'train_loss.csv'), delimiter=',')
@@ -115,6 +67,7 @@ def visualize_loss(dir):
         vals = data[:,[1]]
         plt.plot(iters, vals, **plot_args)
     plt.xlabel('Iteration')
+    # TODO add appropriate y-axis label for loss function
     plt.ylabel(r'$\ell_1$ Loss')
     plt.savefig(os.path.join(dir, 'images', 'loss.pdf'))
     plt.close()
@@ -173,26 +126,23 @@ def visualize_all_weights(weights):
     return [visualize_weights(var) for var in weights]
 
 
-def checkpoints(workspace_dir):
+def checkpoints(workspace_dir, only_recent=False):
     checkpoint_files = []
     for f in os.listdir(os.path.join(workspace_dir, 'checkpoints')):
         if f.endswith('.meta'):
             checkpoint_files.append(f[:f.rfind('.')])
     checkpoint_files.sort()
+    if only_recent:
+        return [checkpoint_files[-1]]
     return checkpoint_files
 
 
 def visualize_timelapse(workspace_dir, example_images, grayscale=False, every=1):
-    # get list of checkpoint files in order
+    # get list of checkpoint files in name order
     checkpoint_files = checkpoints(workspace_dir)
-    # checkpoint_files = []
-    # for f in os.listdir(os.path.join(workspace_dir, 'checkpoints')):
-    #     if f.endswith('.meta'):
-    #         checkpoint_files.append(f[:f.rfind('.')])
-    # checkpoint_files.sort()
-
     if grayscale:
         montage = []
+        # TODO fix this. convert to same number of channels as results
         # montage = [cv2.cvtColor(x, cv2.COLOR_BGR2GRAY) * 255.0 for x in example_images]
     else:
         montage = [x*255.0 for x in example_images]
@@ -220,25 +170,21 @@ def visualize_entanglement(workspace_dir):
 
 
 def visualize_samples(workspace_dir, only_recent=False):
-    checkpoint_files = checkpoints(workspace_dir)
-    i = 0
+    checkpoint_files = checkpoints(workspace_dir, only_recent)
     montage = []
-    sampled_mu = np.random.normal(0, 2.2, (256, 512)) # TODO: size    
-    for f in checkpoint_files:
+    sampled_mu = np.random.normal(0, 1.0, (256, 512)) # TODO: size
+    for idx, f in enumerate(checkpoint_files):
         sess = reload_session(workspace_dir, os.path.join(workspace_dir, 'checkpoints', f))
         graph = tf.get_default_graph()
         output = graph.as_graph_element('outputs/decoder/sample').outputs[0]
         latent = graph.as_graph_element('outputs/sample').inputs[0]
-        # sampled_mu = np.random.normal(0, 0.1, (256, 512)) # TODO: size
         results = sess.run(output, feed_dict={latent: sampled_mu})
         for r in results:
-            # print(np.max(r), np.min(r), np.mean(r))
             montage.append(r * 255.0)
-        # image_fn = os.path.join(workspace_dir, 'images', 'samples', 'sample_' + str(i) + '.jpg')
-        # cv2.imwrite(image_fn, stitch_montage(results))
-        i += 1
-    return stitch_montage(montage,  use_width=256)
-
+    if only_recent:
+        return stitch_montage(montage, ceil(sqrt(len(montage))))
+    else:
+        return stitch_montage(montage,  use_width=256)
     
 
 
@@ -332,11 +278,11 @@ if __name__ == '__main__':
     #     for i in range(args.examples):
     #         ex2[i] = cv2.cvtColor(np.squeeze(example_images[i]), cv2.COLOR_BGR2GRAY)
     #     example_images = ex2
-    print('Loading model and checkpoint..')
+    print('Loading model and checkpoint...')
     sess = reload_session(args.dir)        
 
 
-    ################################################    
+    ################################################
     # prep dirs
     
     # example images and activations
@@ -362,13 +308,15 @@ if __name__ == '__main__':
     # latent samples
     if args.sample or args.all:
         print('Generating samples...')
-        results = visualize_samples(args.dir)
-        image_path = os.path.join(args.dir, 'images', 'samples.png')
+        # generate just most recent checkpoint
+        results = visualize_samples(args.dir, only_recent=True)
+        image_path = os.path.join(args.dir, 'images', 'samples_most_recent.png')
         cv2.imwrite(image_path, results)
-        # results = stitch_montage(results)
-        # for i in range(len(results)):
-            
-        #     cv2.imwrite(image_path, results[i] * 255.0)
+        # # generate timelapse of all checkpoints
+        # results = visualize_samples(args.dir, only_recent=False)
+        # image_path = os.path.join(args.dir, 'images', 'samples.png')
+        # cv2.imwrite(image_path, results)
+        
 
 
     if args.entangle or args.all:

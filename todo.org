@@ -60,6 +60,7 @@
 ** TODO Add option to visualize for visualizing both train and test data for comparison
 ** TODO Add ability to visualize/activations to do it for each checkpoint
 ** TODO Add option to visualization/weights/activations/etc to allow other image palettes/colors than grayscale (for better visualization)
+** TODO Add option for only displaying things every n epochs.
 * Training
 ** TODO Write summary info to text file for later (non-interactive) review.
 ** TODO Add ability to plot losses for variational autoencoder (gen loss and latent loss)
