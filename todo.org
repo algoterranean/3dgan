@@ -1,4 +1,3 @@
-
 * DONE Add ability to alter model input/output depending on the dataset
   CLOSED: [2017-03-11 Sat 16:00]
   - State "DONE"       from "STARTED"    [2017-03-11 Sat 16:00]
@@ -11,7 +10,6 @@
   CLOSED: [2017-03-11 Sat 16:00]
   - State "DONE"       from "STARTED"    [2017-03-11 Sat 16:00]
   - State "STARTED"    from "TODO"       [2017-03-11 Sat 16:00]
-* TODO Add option to use partial dataset per epoch, or to do validation more frequently than per epoch
 * DONE Add option for loss function
   CLOSED: [2017-03-11 Sat 18:31]
   - State "DONE"       from "STARTED"    [2017-03-11 Sat 18:31]
@@ -20,10 +18,60 @@
   CLOSED: [2017-03-11 Sat 18:31]
   - State "DONE"       from "STARTED"    [2017-03-11 Sat 18:31]
   - State "STARTED"    from "TODO"       [2017-03-11 Sat 18:31]
-* TODO Add support for visualizing layers
+* DONE Add support for visualizing layers
+  CLOSED: [2017-04-16 Sun 06:12]
+  - State "DONE"       from "STARTED"    [2017-04-16 Sun 06:12]
+  - State "STARTED"    from "TODO"       [2017-04-16 Sun 06:12]
   - State "TODO"       from              [2017-03-11 Sat 18:31]
-* TODO Add function to visualize network architecture
-* TODO Add support for Tensboard logging
-* TODO Fix bug with MNIST support (input and output size should vary by dataset)
-* TODO Enable support for shuffling data on each epoch
-* TODO Fix bug with CNN support
+* DONE Add function to visualize network architecture
+  CLOSED: [2017-04-16 Sun 06:12]
+  - State "DONE"       from "STARTED"    [2017-04-16 Sun 06:12]
+  - State "STARTED"    from "TODO"       [2017-04-16 Sun 06:12]
+* DONE Add support for Tensboard logging
+  CLOSED: [2017-04-16 Sun 06:12]
+  - State "DONE"       from "STARTED"    [2017-04-16 Sun 06:12]
+  - State "STARTED"    from "TODO"       [2017-04-16 Sun 06:12]
+* DONE Fix bug with MNIST support (input and output size should vary by dataset)
+  CLOSED: [2017-04-16 Sun 06:12]
+  - State "DONE"       from "STARTED"    [2017-04-16 Sun 06:12]
+  - State "STARTED"    from "TODO"       [2017-04-16 Sun 06:12]
+* DONE Fix bug with CNN support
+  CLOSED: [2017-04-16 Sun 06:13]
+  - State "DONE"       from "STARTED"    [2017-04-16 Sun 06:13]
+  - State "STARTED"    from "TODO"       [2017-04-16 Sun 06:13]
+  - State "TODO"       from              [2017-04-16 Sun 06:13]
+  - State "CANCELED"   from "DONE"       [2017-04-16 Sun 06:12]
+  - State "DONE"       from "STARTED"    [2017-04-16 Sun 06:12]
+  - State "STARTED"    from "TODO"       [2017-04-16 Sun 06:12]
+* DONE Enable support for shuffling data on each epoch
+  CLOSED: [2017-04-16 Sun 08:19]
+  - State "DONE"       from "STARTED"    [2017-04-16 Sun 08:19]
+  - State "STARTED"    from "TODO"       [2017-04-16 Sun 08:19]
+
+
+
+* Data
+** TODO Add option to use partial dataset per epoch, or to do validation more frequently than per epoch
+** TODO Add option to get_dataset to support not loading the entire dataset unless we need to
+* Visualization
+** DONE Add option to visualize/montage for the border color.
+   CLOSED: [2017-04-24 Mon 17:23]
+   - State "DONE"       from "STARTED"    [2017-04-24 Mon 17:23]
+   - State "STARTED"    from "TODO"       [2017-04-24 Mon 17:23]
+** TODO visualize/weights should take a layer and find the weights
+** TODO visualize/timelapse should use the file created datetime instead of name to order
+** TODO Add option to visualize for visualizing both train and test data for comparison
+** TODO Add ability to visualize/activations to do it for each checkpoint
+** TODO Add option to visualization/weights/activations/etc to allow other image palettes/colors than grayscale (for better visualization)
+** TODO Add option for only displaying things every n epochs.
+* Training
+** TODO Write summary info to text file for later (non-interactive) review.
+** TODO Add ability to plot losses for variational autoencoder (gen loss and latent loss)
+
+
+* STARTED Add ability to sample from latent vector for such models.
+  - State "STARTED"    from "TODO"       [2017-04-21 Fri 18:29]
+* TODO Add ability to load dataset into persistent memory to speed up development cycle time.
+* TODO Add ability of variational autoencoder to use different batch sizes instead of fixed 256 each time.
+* TODO Clean up network graph. 
+
