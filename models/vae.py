@@ -11,29 +11,22 @@ class VariationalAutoEncoder(Model):
         self.batch_size = 256
         
         # encoder
-        self._encoder_node = self._build_encoder(x)
+        self._encoder = self._build_encoder(x)
         # latent
-        z_mean, z_stddev = self._build_latent(self._encoder_node)
-        samples = tf.random_normal([self.batch_size, self.latent_size], 0, 1, dtype=tf.float32)
-        self._latent_node = z_mean + (z_stddev * samples)  # sampling of latent_size gaussians based on z_mean, z_stddev
-        tf.identity(self._latent_node, name='sample')
+        self._latent, self._z_mean, self._z_stddev = self._build_latent(self._encoder)
         # decoder
-        self._decoder_node = self._build_decoder(self._latent_node)
-
+        self._decoder = self._build_decoder(self._latent)
         # loss
-        generated_loss = -tf.reduce_sum(x * tf.log(1e-8 + self._decoder_node) + (1 - x) * tf.log(1e-8 + (1 - self._decoder_node)))
-        latent_loss = 0.5 * tf.reduce_sum(tf.square(z_mean) + tf.square(z_stddev) - tf.log(1e-8 + tf.square(z_stddev)) - 1) #, 1)
-        self._generated_loss_node = tf.reduce_sum(generated_loss)
-        self._latent_loss_node = tf.reduce_sum(latent_loss)
+        generated_loss = -tf.reduce_sum(x * tf.log(1e-8 + self._decoder) + \
+                                            (1 - x) * tf.log(1e-8 + (1 - self._decoder)))
+        latent_loss = 0.5 * tf.reduce_sum(tf.square(self._z_mean) + \
+                                              tf.square(self._z_stddev) - \
+                                              tf.log(1e-8 + tf.square(self._z_stddev)) - 1)
         self._loss_node = tf.reduce_mean(generated_loss + latent_loss)
-
-
-    def sample(self, sess):
-        sampled_mu = np.random.normal(self.latent_size)
-        results = sess.run(self._decoder_node, feed_dict={self._latent_node: sampled_mu})
-        print("RESULTS")
-        print(results)
+        self._generated_loss = tf.reduce_sum(generated_loss)
+        self._latent_loss = tf.reduce_sum(latent_loss)
         
+
 
         
     def _build_encoder(self, x):
@@ -45,15 +38,21 @@ class VariationalAutoEncoder(Model):
             x = lrelu(conv2d(x, 256, 256, 5, 2))    ; L(x)
             x = lrelu(conv2d(x, 256, 96, 1))        ; L(x)
             x = lrelu(conv2d(x, 96, 32, 1))         ; L(x)
+            tf.identity(x, name='sample')
         return x
+
 
     
     def _build_latent(self, x):
         with tf.variable_scope('latent'):
             flat = flatten(x)
-            w_mean = dense(flat, 32*4*4, self.latent_size)       ; L(w_mean)
-            w_stddev = dense(flat, 32*4*4, self.latent_size)     ; L(w_stddev)
-        return w_mean, w_stddev
+            z_mean = dense(flat, 32*4*4, self.latent_size)       ; L(z_mean)
+            z_stddev = dense(flat, 32*4*4, self.latent_size)     ; L(z_stddev)
+            samples = tf.random_normal([self.batch_size, self.latent_size], 0, 1, dtype=tf.float32)
+            z = (z_mean + (z_stddev * samples))                  ; L(z)
+            tf.identity(z, name='sample')
+        return (z, z_mean, z_stddev)
+            
 
     
     def _build_decoder(self, x):

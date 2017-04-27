@@ -334,7 +334,7 @@ if __name__ == '__main__':
     # example timelapse
     if args.timelapse or args.all:
         print('Generating timelapse...')
-        results = visualize_timelapse(args.dir, example_images, args.grayscale, every=40)
+        results = visualize_timelapse(args.dir, example_images, args.grayscale) #, every=40)
         cv2.imwrite(os.path.join(args.dir, 'images', 'timelapse.png'), results)
         # reset session to most recent checkpoint
         sess = reload_session(args.dir)
