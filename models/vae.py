@@ -30,6 +30,7 @@ class VariationalAutoEncoder(Model):
 
         
     def _build_encoder(self, x):
+        """Input: 64x64x3. Output: 4x4x32."""
         # layer_sizes = [64, 128, 256, 256, 96, 32] 
         with tf.variable_scope('encoder'):
             x = lrelu(conv2d(x, 3, 64, 5, 2))       ; L(x)
@@ -44,6 +45,7 @@ class VariationalAutoEncoder(Model):
 
     
     def _build_latent(self, x):
+        """Input: 4x4x32. Output: 200."""
         with tf.variable_scope('latent'):
             flat = flatten(x)
             z_mean = dense(flat, 32*4*4, self.latent_size)       ; L(z_mean)
@@ -56,6 +58,7 @@ class VariationalAutoEncoder(Model):
 
     
     def _build_decoder(self, x):
+        """Input: 200. Output: 64x64x3."""
         # layer sizes = [96, 256, 256, 128, 64]
         with tf.variable_scope('decoder'):
             x = dense(x, self.latent_size, 32*4*4)
