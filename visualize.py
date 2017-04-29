@@ -28,10 +28,15 @@ def stitch_montage(image_list, add_border=True, use_width=0, color=(0, 0, 0)):
     montage_w = use_width if use_width > 0 else ceil(sqrt(num_images))
     montage_h = int(num_images/montage_w)
     ishape = image_list[0].shape
+
+    # ishape[-1] should be 1 (grayscale) or 3 (rgb)
+
     
     # colored borders
     v_border = np.zeros((ishape[0], 1, ishape[-1]))
+    # v_border = np.zeros((ishape[0], 1, 3))
     h_border = np.zeros((1, (ishape[1]+1) * montage_w + 1, ishape[-1]))
+    # h_border = np.zeros((1, (ishape[1]+1) * montage_w + 1, 3))
     for a in [v_border, h_border]:
         a[:, :, 0].fill(color[2] * 255.0)
         a[:, :, 1].fill(color[1] * 255.0)
@@ -93,9 +98,10 @@ def visualize_activations(layer, input):
     if len(activations.shape) > 2:
         for f_idx in range(activations.shape[-1]):
             f = activations[0,:,:,f_idx] * 255.0
+            f = np.repeat(f[:,:, np.newaxis], 3, axis=2)
             # a = activations[0,:,:,f_idx]
             # print(np.max(a), np.min(a), np.mean(a))
-            image_list.append(np.expand_dims(f, 2))
+            image_list.append(f)
     else:
         # TODO how to represent this in an image?
         print(activations)
@@ -123,7 +129,8 @@ def visualize_weights(var):
         else:
             for f_idx2 in range(weights.shape[-2]):
                 f = weights[:,:,f_idx2,f_idx] * 255.0
-                image_list.append(np.expand_dims(f, 2))
+                f = np.repeat(f[:,:, np.newaxis], 3, axis=2)
+                image_list.append(f)
     return stitch_montage(image_list)
 
 
@@ -156,11 +163,11 @@ def visualize_timelapse(workspace_dir, example_images, grayscale=False, every=1)
     return stitch_montage(montage, use_width=len(example_images)) #args.examples)
 
 
-def visualize_entanglement(workspace_dir):
-    sess = reload_session(args.dir)
-    graph = tf.get_default_graph()
-    sampled_mu = np.random.normal(0, 2.2, (1))[0]
-    print('sampled mu:', sampled_mu)
+# def visualize_entanglement(workspace_dir):
+#     sess = reload_session(args.dir)
+#     graph = tf.get_default_graph()
+#     sampled_mu = np.random.normal(0, 2.2, (1))[0]
+#     print('sampled mu:', sampled_mu)
 
 
 def visualize_samples(workspace_dir, only_recent=False):
@@ -251,7 +258,7 @@ if __name__ == '__main__':
     parser.add_argument('--bestfit', default=False, action='store_true')
     parser.add_argument('--grayscale', default=False, action='store_true')
     parser.add_argument('--sample', default=False, action='store_true')
-    parser.add_argument('--entangle', default=False, action='store_true')    
+    # parser.add_argument('--entangle', default=False, action='store_true')    
     args = parser.parse_args()
 
     # plot loss
@@ -313,8 +320,8 @@ if __name__ == '__main__':
         
 
 
-    if args.entangle or args.all:
-        results = visualize_entanglement(args.dir)
+    # if args.entangle or args.all:
+    #     results = visualize_entanglement(args.dir)
             
     
     # activations
