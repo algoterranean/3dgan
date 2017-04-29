@@ -75,3 +75,6 @@
 * TODO Add ability of variational autoencoder to use different batch sizes instead of fixed 256 each time.
 * TODO Clean up network graph. 
 
+* Ideas
+** Use Facebook Mask-RNN model to segment image. These segments depth will vary, but should be on a similar scale to eachother. 
+   Then use the segmentation results to scale of image, then use that to predict depth. 

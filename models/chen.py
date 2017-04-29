@@ -6,7 +6,8 @@ from .model import Model
 
 class ChenCNN(Model):
     def __init__(self, x):
-        Model.__init__(self, x)
+        Model.__init__(self)
+
 
     def _build_graph(self, x):
         orig_shape = x.get_shape().as_list()

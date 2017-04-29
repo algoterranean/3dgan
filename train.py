@@ -14,8 +14,8 @@ from sys import stdout
 from os import path
 # local
 # from models.fc import SimpleFC
-# from models.conv import SimpleCNN
-# from models.chen import ChenCNN
+from models.conv import SimpleCNN
+from models.chen import ChenCNN
 from models.vae import VariationalAutoEncoder
 from msssim import MultiScaleSSIM, tf_ssim, tf_ms_ssim
 from data import Floorplans
@@ -60,7 +60,13 @@ def init_input(sess, dataset, grayscale=False):
 
 def init_model(sess, x, model_name): #, optimizer, global_step):
     with sess.as_default():
-        return VariationalAutoEncoder(x) #, optimizer, global_step)
+        if args.model == 'vae':
+            return VariationalAutoEncoder(x) #, optimizer, global_step)
+        elif args.model == 'cnn':
+            return SimpleCNN(x, args.layers)
+        elif args.model == 'chen':
+            return ChenCNN(x)
+        
             # # model    
             # if args.model == 'fc':
             #     model = SimpleFC(x, args.layers)
@@ -225,13 +231,18 @@ if __name__ == '__main__':
         for i in range(n_trbatches):
             # run train step
             xs, ys = data.train.next_batch(args.batchsize)
-            _, l, gl, ll = sess.run([train_op, loss, model.generated_loss, model.latent_loss], feed_dict={x_input: xs})
+            if args.model == 'cnn':
+                _, l = sess.run([train_op, loss], feed_dict={x_input: xs})
+                print_progress(epoch, args.batchsize * (i+1), data.train.num_examples, epoch_start_time, l)
+            else:
+                _, l, gl, ll = sess.run([train_op, loss, model.generated_loss, model.latent_loss], feed_dict={x_input: xs})
+                print_progress(epoch, args.batchsize * (i+1), data.train.num_examples, epoch_start_time, l, gl, ll)
             iterations_completed += args.batchsize
-            # print(l, gl, ll)
+
         
             # log and print progress
             log_files['train_loss'].write('{:05d},{:.5f}\n'.format(iterations_completed, l))
-            print_progress(epoch, args.batchsize * (i+1), data.train.num_examples, l, gl, ll, epoch_start_time)
+            
         
             # run batch summary nodes
             if batch_summary_nodes is not None:

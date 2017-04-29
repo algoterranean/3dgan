@@ -12,10 +12,16 @@ from data import Floorplans
 
 
 
-def print_progress(epoch, completed, total, loss, gl, ll, start_time):
+
+# def print_progress(epoch, completed, total, loss, gl, ll, start_time):
+
+def print_progress(epoch, completed, total, start_time,
+                       loss, gen_loss=0, latent_loss=0):
     end_time = time.time()
     sys.stdout.write('\r')
-    sys.stdout.write('Epoch {:03d}: {:05d}/{:05d}: loss: {:.4f} gen loss: {:.4f} latent loss: {:.4f} ({:d}s)'.format(epoch, completed, total, loss, gl, ll, int(end_time - start_time)))
+    # gl = gen_loss if gen_loss is not None else '0'
+    # ll = latent_oss if latent_loss is not None else '0'
+    sys.stdout.write('Epoch {:03d}: {:05d}/{:05d}: loss: {:.4f} gen loss: {:.4f} latent loss: {:.4f} ({:d}s)'.format(epoch, completed, total, loss, gen_loss, latent_loss, int(end_time - start_time)))
     sys.stdout.flush()
 
 

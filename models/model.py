@@ -9,7 +9,7 @@ class Model:
         self._latent_loss = None
         self._generated_loss = None
         self._loss = None
-        self._train_op = None        
+        self._train_op = None
 
     @property
     def encoder(self):

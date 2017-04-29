@@ -22,13 +22,11 @@ class VariationalAutoEncoder(Model):
         latent_loss = 0.5 * tf.reduce_sum(tf.square(self._z_mean) + \
                                               tf.square(self._z_stddev) - \
                                               tf.log(1e-8 + tf.square(self._z_stddev)) - 1)
-        self._loss_node = tf.reduce_mean(generated_loss + latent_loss)
+        self._loss = tf.reduce_mean(generated_loss + latent_loss)
         self._generated_loss = tf.reduce_sum(generated_loss)
         self._latent_loss = tf.reduce_sum(latent_loss)
-        
 
 
-        
     def _build_encoder(self, x):
         """Input: 64x64x3. Output: 4x4x32."""
         # layer_sizes = [64, 128, 256, 256, 96, 32] 
@@ -42,7 +40,6 @@ class VariationalAutoEncoder(Model):
             tf.identity(x, name='sample')
         return x
 
-
     
     def _build_latent(self, x):
         """Input: 4x4x32. Output: 200."""
@@ -54,7 +51,6 @@ class VariationalAutoEncoder(Model):
             z = (z_mean + (z_stddev * samples))                  ; L(z)
             tf.identity(z, name='sample')
         return (z, z_mean, z_stddev)
-            
 
     
     def _build_decoder(self, x):
@@ -74,5 +70,3 @@ class VariationalAutoEncoder(Model):
         return x
 
     
-            
-
