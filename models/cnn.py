@@ -9,7 +9,7 @@ from .ops import dense, conv2d, deconv2d, lrelu, flatten, L
 
 
 class SimpleCNN(Model):
-    def __init__(self, x, layer_sizes):
+    def __init__(self, optimizer, x, layer_sizes):
         Model.__init__(self)
         self.layer_sizes = layer_sizes
         orig_shape = x.get_shape().as_list()
@@ -17,6 +17,9 @@ class SimpleCNN(Model):
         self._encoder = self._build_encoder(x)
         self._decoder = self._build_decoder(self._encoder, orig_shape[3])
         self._loss = tf.reduce_mean(tf.abs(x - self._decoder))
+        self._optimizer = optimizer        
+        self._train_op = optimizer.minimize(self._loss)
+
         
 
     def _build_encoder(self, x):

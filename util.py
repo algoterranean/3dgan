@@ -15,13 +15,12 @@ from data import Floorplans
 
 # def print_progress(epoch, completed, total, loss, gl, ll, start_time):
 
-def print_progress(epoch, completed, total, start_time,
-                       loss, gen_loss=0, latent_loss=0):
+def print_progress(epoch, completed, total, start_time, loss_dict):
     end_time = time.time()
-    sys.stdout.write('\r')
-    # gl = gen_loss if gen_loss is not None else '0'
-    # ll = latent_oss if latent_loss is not None else '0'
-    sys.stdout.write('Epoch {:03d}: {:05d}/{:05d}: loss: {:.4f} gen loss: {:.4f} latent loss: {:.4f} ({:d}s)'.format(epoch, completed, total, loss, gen_loss, latent_loss, int(end_time - start_time)))
+    s = ""
+    for k, v in loss_dict.items():
+        s += '{}: {:.4f}, '.format(k, v)
+    sys.stdout.write('\rEpoch {:03d}: {:05d}/{:05d}: {} ({:d}s)'.format(epoch, completed, total, s[:-2], int(end_time - start_time)))
     sys.stdout.flush()
 
 
@@ -51,14 +50,105 @@ def prep_workspace(dirname):
 
 def visualize_parameters():
     total_params = 0
-    for variable in tf.trainable_variables():
-        shape = variable.get_shape()
-        num_params = 1
-        for dim in shape:
-            num_params *= dim.value
-        total_params += num_params
-        print('Variable name: {}, size: {}, shape: {}'.format(variable.name, num_params, variable.get_shape()))
+
+    print('\nInputs:')
+    print('=' * 40)
+    for c in tf.get_collection('inputs'):
+        print('{}, shape: {}'.format(c.name, c.get_shape()))
+        
+    # for c in tf.get_default_graph().get_operations():
+    #     if c.name.split('/')[0] == 'inputs':
+    #         print(c)
+        
+
+    categories = {}
+    for c in tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope='model'):
+        cat = c.name.split('/')[1]
+        if not cat in categories:
+            categories[cat] = []
+        categories[cat].append(c)
+
+    print('\nModel parameters:')
+    print('=' * 40)
+    for k,v in categories.items():
+        debug(k)
+        for item in v:
+            shape = item.get_shape()
+            print('\t{}, shape: {}'.format(item.name.split('/')[-1], shape))
+
+
+    categories = {}
+    for c in tf.get_collection('layer'):
+        cat = c.name.split('/')[1]
+        if not cat in categories:
+            categories[cat] = []
+        categories[cat].append(c)
+
+        
+
+    print('\nModel layers:')
+    print('=' * 40)
+    for k, v in categories.items():
+        debug(k)
+        for item in v:
+            shape = item.get_shape()
+            print('\t{}, shape: {}'.format(item.name.split('/')[-1], shape))
+
+        
+
+    
+    # for c in collection:
+    #     print(c.name, c.get_shape())
+    
+
+
+
+    # collection = tf.get_collection('layer', scope='model/encoder')
+    # # collection.sort(key=lambda x: x.name)
+
+    # # c = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope='model/encoder')
+    # # for tensor in c:
+    # #     print(tensor)
+    # #     print(tensor.consumers())
+
+
+    # c = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope='model/encoder')
+    # for tensor in c:
+    #     print(tensor)
+    # print('=' * 40)        
+
+    # # for variable in tf.get_collection(tf.GraphKeys.W
+    # for tensor in collection:
+    #     shape = tensor.get_shape()
+    #     print('Layer ({}), type: {}, shape: {}'.format(tensor.name, tensor.dtype.name, shape))
+    #     print('\tInputs:')
+    #     for x in tensor.op.inputs:
+    #         print('\t\t', x)
+    #     print('\tOutputs:', tensor.op.outputs)
+    
+    #     # if shape is not None:
+    #     #     num_params = 1
+    #     #     for dim in shape:
+    #     #         num_params *= dim.value
+    #     #     total_params += num_params
+    #     # print('Layer ({}): size: {}, shape: {}'.format(tensor.name, 0, shape))
+
+    #     # print('\tOn {}'.format(tensor.device))
+    #     # print('\tConsumers:', tensor.consumers())
+        
+
     return total_params
+    
+
+        
+    # for variable in tf.trainable_variables():
+    #     shape = variable.get_shape()
+    #     num_params = 1
+    #     for dim in shape:
+    #         num_params *= dim.value
+    #     total_params += num_params
+    #     print('Variable name: {}, size: {}, shape: {}'.format(variable.name, num_params, variable.get_shape()))
+    # return total_params
 
 
 OKBLUE = '\033[94m'

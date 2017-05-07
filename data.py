@@ -36,6 +36,14 @@ class Dataset:
         return None
 
 
+# class Floorplans:
+#     def __init__(self):
+#         train_files = '/mnt/research/projects/autoencoders/data/floorplans.64.train.tfrecords'        
+#         validation_files = '/mnt/research/projects/autoencoders/data/floorplans.64.validation.tfrecords'
+#         test_files = '/mnt/research/projects/autoencoders/data/floorplans.64.test.tfrecords'        
+
+
+
 class Floorplans:
     def __init__(self, root_dir='/mnt/research/datasets/floorplans/'):
         # self.test = Dataset(os.path.join(root_dir, 'test_set.txt'))

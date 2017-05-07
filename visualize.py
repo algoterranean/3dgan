@@ -35,6 +35,7 @@ def stitch_montage(image_list, add_border=True, use_width=0, color=(0, 0, 0)):
     # colored borders
     v_border = np.zeros((ishape[0], 1, ishape[-1]))
     # v_border = np.zeros((ishape[0], 1, 3))
+    # print('shape:', ishape, 'montage_w:', montage_w)
     h_border = np.zeros((1, (ishape[1]+1) * montage_w + 1, ishape[-1]))
     # h_border = np.zeros((1, (ishape[1]+1) * montage_w + 1, 3))
     for a in [v_border, h_border]:
@@ -91,8 +92,8 @@ def visualize_activations(layer, input):
     graph = tf.get_default_graph()
     x_input = graph.as_graph_element('inputs/x_input').outputs[0]
     activations = sess.run(layer, feed_dict={x_input: input})
-    print('layer:', layer)
-    print('activations:', activations.shape)
+    # print('layer:', layer)
+    # print('activations:', activations.shape)
 
     image_list = []
     if len(activations.shape) > 2:
@@ -104,6 +105,8 @@ def visualize_activations(layer, input):
             image_list.append(f)
     else:
         # TODO how to represent this in an image?
+        # TODO TODO TODO TODO
+        # skip over fully connected layers? 
         print(activations)
         # a = activations
         # print(np.max(a), np.min(a), np.mean(a))
@@ -154,7 +157,8 @@ def visualize_timelapse(workspace_dir, example_images, grayscale=False, every=1)
             sess = reload_session(workspace_dir, os.path.join(workspace_dir, 'checkpoints', f))
             graph = tf.get_default_graph()
             x_input = graph.as_graph_element('inputs/x_input').outputs[0]
-            y_hat = graph.as_graph_element('outputs/y_hat').outputs[0]
+            y_hat = graph.as_graph_element('model/decoder/sample').outputs[0]
+            # y_hat = graph.as_graph_element('outputs/y_hat').outputs[0]
         
             results = sess.run(y_hat, feed_dict={x_input: example_images})
             for r in results:
@@ -170,22 +174,28 @@ def visualize_timelapse(workspace_dir, example_images, grayscale=False, every=1)
 #     print('sampled mu:', sampled_mu)
 
 
-def visualize_samples(workspace_dir, only_recent=False):
+def visualize_samples(workspace_dir, example_images, only_recent=False):
     checkpoint_files = checkpoints(workspace_dir, only_recent)
     montage = []
-    sampled_mu = np.random.normal(0, 1.0, (256, 512)) # TODO: size
+    # sampled_mu = np.random.normal(0, 1.0, (256, 512)) # TODO: size
+    # sampled_mu = np.random.normal(0, 1.0, (batch_size, 512)) # TODO: size
+    
     for idx, f in enumerate(checkpoint_files):
+        print('loading checkpoint', f)
         sess = reload_session(workspace_dir, os.path.join(workspace_dir, 'checkpoints', f))
         graph = tf.get_default_graph()
-        output = graph.as_graph_element('outputs/decoder/sample').outputs[0]
-        latent = graph.as_graph_element('outputs/sample').inputs[0]
-        results = sess.run(output, feed_dict={latent: sampled_mu})
+        output = graph.as_graph_element('model/decoder/sample').outputs[0]
+        latent = graph.as_graph_element('model/latent/sample').inputs[0]
+        x_input = graph.as_graph_element('inputs/x_input').outputs[0]
+        
+        # results = sess.run(output, feed_dict={latent: sampled_mu, x_input: example_images})
+        results = sess.run(output, feed_dict={x_input: example_images})        
         for r in results:
             montage.append(r * 255.0)
     if only_recent:
         return stitch_montage(montage, ceil(sqrt(len(montage))))
     else:
-        return stitch_montage(montage,  use_width=256)
+        return stitch_montage(montage,  use_width=int(len(montage)/len(checkpoint_files)))
     
 
 
@@ -258,6 +268,7 @@ if __name__ == '__main__':
     parser.add_argument('--bestfit', default=False, action='store_true')
     parser.add_argument('--grayscale', default=False, action='store_true')
     parser.add_argument('--sample', default=False, action='store_true')
+    parser.add_argument('--batchsize', type=int, default=256)
     # parser.add_argument('--entangle', default=False, action='store_true')    
     args = parser.parse_args()
 
@@ -310,11 +321,11 @@ if __name__ == '__main__':
     if args.sample or args.all:
         print('Generating samples...')
         # generate just most recent checkpoint
-        results = visualize_samples(args.dir, only_recent=True)
+        results = visualize_samples(args.dir, example_images, only_recent=True)
         image_path = os.path.join(args.dir, 'images', 'samples_most_recent.png')
         cv2.imwrite(image_path, results)
         # generate timelapse of all checkpoints
-        results = visualize_samples(args.dir, only_recent=False)
+        results = visualize_samples(args.dir, example_images, only_recent=False)
         image_path = os.path.join(args.dir, 'images', 'samples.png')
         cv2.imwrite(image_path, results)
         

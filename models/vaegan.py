@@ -6,9 +6,11 @@ from .ops import dense, conv2d, deconv2d, lrelu, flatten, L
 
 
 class VAEGAN(Model):
-    def __init__(self, x): # optimizer):
+    def __init__(self, x, optimizer):
+        Model.__init__(self)
         self.latent_size = 512
         self.batch_size = 256
+        self._optimizer = optimizer
         
         # encoder
         self._encoder = self._build_encoder(x)
@@ -26,10 +28,15 @@ class VAEGAN(Model):
         self._generated_loss = tf.reduce_sum(generated_loss)
         self._latent_loss = tf.reduce_sum(latent_loss)
 
-        self._discriminator_real, self._discrimator_logits_real = self._build_discriminator(x)
-        self._discriminator_loss_real = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(self._discriminator_logits_real, tf.ones_like(self._discriminator_real)))
-        self._discriminator_fake, self._discriminator_logits_fake = self._build_discriminator(self._decoder)
-        self._discriminator_loss_fake = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(self._discriminator_logits_fake, tf.ones_like(self._discriminator_fake)))
+        self._discriminator = self._build_discriminator(x)
+        
+        
+
+        # self._discriminator_real, self._discriminator_logits_real = self._build_discriminator(x)
+        # self._discriminator_loss_real = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(logits=self._discriminator_logits_real, labels=tf.ones_like(self._discriminator_real)))
+        # self._discriminator_fake, self._discriminator_logits_fake = self._build_discriminator(self._decoder)
+        # self._discriminator_loss_fake = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(logits=self._discriminator_logits_fake, labels=tf.ones_like(self._discriminator_fake)))
+        # self._discriminator_loss = self._discriminator_loss_real + self._discriminator_loss_fake
 
 
 
@@ -89,5 +96,21 @@ class VAEGAN(Model):
             x = tf.nn.sigmoid(deconv2d(x, 64, 3, 5, 2))  ; L(x)
             tf.identity(x, name='sample')
         return x
+
+    def train(self, epoch, x_input, data, batch_size, tb_writer, summary_nodes, display=True):
+        epoch_start_time = time.time()
+        n_batches = int(data.train.num_examples/batch_size)
+        for i in range(n_batches):
+            xs, ys = data.train.next_batch(batch_size)
+            _, l, summary = self._sess.run([self._train_op, self.loss, summary_nodes], feed_dict={x_input: xs})
+            print_progress(epoch, batch_size*(i+1), data.train.num_examples, epoch_start_time, {'loss': l})
+            tb_writer.add_summary(summary, epoch)
+
+        # # perform validation
+        # results = fold(self._sess, x_input, [self.loss], data.validation, batch_size, int(data.validation.num_examples/batch_size))
+        # stdout.write(', validation: {:.4f}\r\n'.format(results[0]))
+        stdout.write('\r\n')
+
+
 
     
