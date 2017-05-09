@@ -191,7 +191,8 @@ def visualize_samples(workspace_dir, example_images, only_recent=False):
         # results = sess.run(output, feed_dict={latent: sampled_mu, x_input: example_images})
         results = sess.run(output, feed_dict={x_input: example_images})        
         for r in results:
-            montage.append(r * 255.0)
+            r = ((r + 1.0) / 2.0) * 255.0
+            montage.append(r)
     if only_recent:
         return stitch_montage(montage, ceil(sqrt(len(montage))))
     else:

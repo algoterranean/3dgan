@@ -38,10 +38,11 @@ class GAN(Model):
         # loss
         with tf.variable_scope('losses'):
             # need to maximize this, but TF only does minimization, so we use negative
-            
-            self._loss_d = tf.reduce_mean(-tf.log(self._disc_real + 1e-8) - \
-                                              tf.log(1 - self._disc_fake + 1e-8))   ; M(self._loss_d, 'losses')
-            self._loss_g = tf.reduce_mean(-tf.log(self._disc_fake + 1e-8))          ; M(self._loss_g, 'losses')
+            with tf.variable_scope('discriminator'):
+                self._loss_d = tf.reduce_mean(-tf.log(self._disc_real + 1e-8) - \
+                                                  tf.log(1 - self._disc_fake + 1e-8))   ; M(self._loss_d, 'losses')
+            with tf.variable_scope('generator'):
+                self._loss_g = tf.reduce_mean(-tf.log(self._disc_fake + 1e-8))          ; M(self._loss_g, 'losses')
 
         d_vars = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope='model/discriminator')
         g_vars = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope='model/decoder')
@@ -57,8 +58,10 @@ class GAN(Model):
         # optimizers
         with tf.variable_scope('train_op'):
             # self._disc_optimizer = tf.train.GradientDescentOptimizer().minimize(self._loss_d, var_list=d_vars)
-            self._disc_optimizer = tf.train.AdamOptimizer(0.0002, 0.5).minimize(self._loss_d, var_list=d_vars)            
-            self._gen_optimizer = tf.train.AdamOptimizer(0.0002, 0.5).minimize(self._loss_g, var_list=g_vars)
+            with tf.variable_scope('discriminator'):
+                self._disc_optimizer = tf.train.AdamOptimizer(0.0002, 0.5).minimize(self._loss_d, var_list=d_vars)
+            with tf.variable_scope('generator'):
+                self._gen_optimizer = tf.train.AdamOptimizer(0.0002, 0.5).minimize(self._loss_g, var_list=g_vars)
             # self._disc_optimizer = optimizer.minimize(self._loss_d, var_list=d_vars)
             # self._gen_optimizer = optimizer.minimize(self._loss_g, var_list=g_vars)
 
