@@ -269,7 +269,7 @@ if __name__ == '__main__':
     parser.add_argument('--bestfit', default=False, action='store_true')
     parser.add_argument('--grayscale', default=False, action='store_true')
     parser.add_argument('--sample', default=False, action='store_true')
-    parser.add_argument('--batchsize', type=int, default=256)
+    parser.add_argument('--batch_size', type=int, default=256)
     # parser.add_argument('--entangle', default=False, action='store_true')    
     args = parser.parse_args()
 

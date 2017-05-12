@@ -13,6 +13,10 @@ def lrelu(x, leak=0.2, name='lrelu'):
 def dense(x, input_size, output_size, name=None):
     w_name = name if name is None else name + '_w'
     b_name = name if name is None else name + '_b'
+
+    # input_size = inttf.shape(x)[1])
+    # var_shape = tf.stack([input_size, output_size])
+
     W = tf.get_variable(name=w_name, shape=[input_size, output_size], initializer=he_init())
     # W = tf.Variable(tf.random_normal([input_size, output_size]))
     # b = tf.Variable(tf.random_normal([output_size]))
@@ -69,14 +73,19 @@ def L(x):
 
 def M(x, collection):
     """Mark this op as part of a collection and add histograms."""
-    short_name = x.name.split('/')[-1]
     tf.add_to_collection(collection, x)
-    tf.add_to_collection('batch_summaries', tf.summary.histogram(short_name, x))
-    # print('Adding summary for', x)
-    # print('Name:', x.name, 'Short Name:', short_name)
+    # add summary nodes
+    tf.summary.histogram(x.op.name + '/activations', x)
+    tf.summary.scalar(x.op.name + '/sparsity', tf.nn.zero_fraction(x))
+    # tf.summary.image(x.op.name + '/activations', x, collections=['epoch'])
     return x
 
 
-
+# def activation_summary(x):
+#     tf.summary.histogram(x.op.name + '/activations', x, collections=['epoch'])
+#     tf.summary.scalar(x.op.name + '/sparsity', tf.nn.zero_fraction(x), collections=['epoch'])
     
     
+# def activation_summary(x):
+#     tf.summary.image(x.op.name + '/activations', x, collections=['epoch'])
+#     tf.summary.scalar(x.op.name + '/sparsity', tf.nn.zero_fraction(x), collections=['epoch'])

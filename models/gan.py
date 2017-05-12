@@ -5,169 +5,132 @@ import time
 from sys import stdout
 from .model import Model
 from .ops import dense, conv2d, deconv2d, lrelu, flatten, M
-from util import print_progress, fold
+from util import print_progress, fold, average_gradients, init_optimizer
 
 
 
 
 class GAN(Model):
-    def __init__(self, x, batch_size):
-        Model.__init__(self)
-        self.latent_size = 512
-        self.batch_size = batch_size
-        # self._optimizer = optimizer
-        
-        self._x_input = x
-        # latent
-        self._latent = self._build_latent()
-        # generator
-        self._decoder = self._build_decoder(self._latent)
+    """Vanilla Generative Adversarial Network with multi-GPU support."""
+    def __init__(self, x, global_step, args): #batch_size, latent_size, g_opt, d_opt):
+        with tf.device('/cpu:0'):
+            # global_step = tf.get_variable('global_step', [], initializer=tf.constant_initializer(0), trainable=False)
+            g_opt = init_optimizer(args)
+            d_opt = init_optimizer(args)
 
-        
-        with tf.variable_scope('discriminator') as scope:
-            # discriminator (real)
-            self._disc_real, self._disc_logits_real = self._build_discriminator(x)
-            # discriminator (fake)
-            scope.reuse_variables()
-            self._disc_fake, self._disc_logits_fake = self._build_discriminator(self._decoder)
-
-        tf.add_to_collection('epoch_summaries', tf.summary.image('input images', x))
-        tf.add_to_collection('epoch_summaries', tf.summary.image('generator images', self._decoder))
-        
-        
-        # loss
-        with tf.variable_scope('losses'):
-            # need to maximize this, but TF only does minimization, so we use negative
-            with tf.variable_scope('discriminator'):
-                self._loss_d = tf.reduce_mean(-tf.log(self._disc_real + 1e-8) - \
-                                                  tf.log(1 - self._disc_fake + 1e-8))   ; M(self._loss_d, 'losses')
-            with tf.variable_scope('generator'):
-                self._loss_g = tf.reduce_mean(-tf.log(self._disc_fake + 1e-8))          ; M(self._loss_g, 'losses')
-
-        d_vars = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope='model/discriminator')
-        g_vars = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope='model/decoder')
-        print('discriminator vars\n', '='*40)
-        for d in d_vars:
-            print(d.name)
-
-        print('generator vars\n', '='*40)
-        for g in g_vars:
-            print(g.name)
+            g_tower_grads = []
+            d_tower_grads = []
+            with tf.variable_scope(tf.get_variable_scope()):
+                for gpu_id in range(args.n_gpus):
+                    with tf.device('/gpu:{}'.format(gpu_id)):
+                        with tf.name_scope('TOWER_{}'.format(gpu_id)) as scope:
+                            # latent
+                            with tf.variable_scope('latent'):
+                                z = self.build_latent(args.batch_size, args.latent_size)
+                            # generator
+                            with tf.variable_scope('generator'):
+                                g = self.build_generator(z, args.latent_size)
+                            # discriminator
+                            with tf.variable_scope('discriminator') as scope:
+                                # x = input, so restrict data to a slice for this particular gpu
+                                d_real = self.build_discriminator(x[gpu_id * args.batch_size:(gpu_id+1)*args.batch_size,:])
+                                scope.reuse_variables()
+                                d_fake = self.build_discriminator(g)
+                            tf.summary.image('real_images', x, collections=['epoch'])
+                            tf.summary.image('fake_images', g, collections=['epoch'])
+            
+                            # losses
+                            with tf.variable_scope('losses'):
+                                # need to maximize this, but TF only does minimization, so we use negative
+                                with tf.variable_scope('generator'):
+                                    g_loss = tf.reduce_mean(-tf.log(d_fake + 1e-8), name='g_loss')
+                                with tf.variable_scope('discriminator'):
+                                    d_loss = tf.reduce_mean(-tf.log(d_real + 1e-8) - tf.log(1 - d_fake + 1e-8), name='d_loss')
+                            tf.add_to_collection('losses', g_loss)
+                            tf.add_to_collection('losses', d_loss)
+                            tf.summary.scalar('loss_g', g_loss)
+                            tf.summary.scalar('loss_d', d_loss)
+    
+                            g_vars = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope='model/generator')
+                            d_vars = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope='model/discriminator')
+    
+                            tf.get_variable_scope().reuse_variables()
+                            with tf.variable_scope('gradients'):
+                                with tf.variable_scope('generator'):
+                                    g_grads  = g_opt.compute_gradients(g_loss, g_vars)
+                                with tf.variable_scope('discriminator'):
+                                    d_grads = d_opt.compute_gradients(d_loss, d_vars)
+                            g_tower_grads.append(g_grads)
+                            d_tower_grads.append(d_grads)
+    
+            
+            # back on CPU
+            with tf.variable_scope('average_gradients'):
+                with tf.variable_scope('generator'):
+                    g_grads = average_gradients(g_tower_grads)
+                with tf.variable_scope('discriminator'):
+                    d_grads = average_gradients(d_tower_grads)
+            with tf.variable_scope('apply_gradients'):
+                with tf.variable_scope('generator'):
+                    g_apply_gradient_op = g_opt.apply_gradients(g_grads, global_step=global_step)
+                with tf.variable_scope('discriminator'):
+                    d_apply_gradient_op = d_opt.apply_gradients(d_grads, global_step=global_step)
+    
+            self.train_op = tf.group(g_apply_gradient_op, d_apply_gradient_op)
             
         
-        # optimizers
-        with tf.variable_scope('train_op'):
-            # self._disc_optimizer = tf.train.GradientDescentOptimizer().minimize(self._loss_d, var_list=d_vars)
-            with tf.variable_scope('discriminator'):
-                self._disc_optimizer = tf.train.AdamOptimizer(0.0002, 0.5).minimize(self._loss_d, var_list=d_vars)
-            with tf.variable_scope('generator'):
-                self._gen_optimizer = tf.train.AdamOptimizer(0.0002, 0.5).minimize(self._loss_g, var_list=g_vars)
-            # self._disc_optimizer = optimizer.minimize(self._loss_d, var_list=d_vars)
-            # self._gen_optimizer = optimizer.minimize(self._loss_g, var_list=g_vars)
-
-
-        tf.add_to_collection('batch_summaries', tf.summary.scalar('loss_d', self._loss_d)) #, var_list='hi'))
-        tf.add_to_collection('batch_summaries', tf.summary.scalar('loss_g', self._loss_g))
-
         
-        
-    def _build_latent(self):
-        """Input: 4x4x32. Output: 200."""
-        with tf.variable_scope('latent') as scope:
-            z = tf.random_normal([self.batch_size, self.latent_size], 0, 1)
-            # z = tf.placeholder(tf.float32, [None, self.latent_size])    ; M(z, 'layer')
-            tf.identity(z, name='sample')
+    def build_latent(self, batch_size, latent_size):
+        z = tf.random_normal([batch_size, latent_size], 0, 1)
+        tf.identity(z, name='sample')
         return z
-
     
-    def _build_decoder(self, x):
-        """Input: 200. Output: 64x64x3."""
-        with tf.variable_scope('decoder') as scope:
-            # layer sizes = [96, 256, 256, 128, 64]
-            with tf.variable_scope('fit_and_reshape'):
-                x = tf.nn.relu(batch_norm(dense(x, self.latent_size, 32*4*4, name='d1')))
-                x = tf.reshape(x, [-1, 4, 4, 32]) # un-flatten
-            with tf.variable_scope('conv1'):
-                x = tf.nn.relu(batch_norm(conv2d(x, 32, 96, 1, name='c1')))            ; M(x, 'layer')
-            with tf.variable_scope('conv2'):                
-                x = tf.nn.relu(batch_norm(conv2d(x, 96, 256, 1, name='c2')))           ; M(x, 'layer')
-            with tf.variable_scope('deconv1'):                
-                x = tf.nn.relu(batch_norm(deconv2d(x, 256, 256, 5, 2,name='dc1')))     ; M(x, 'layer')
-            with tf.variable_scope('deconv2'):                
-                x = tf.nn.relu(batch_norm(deconv2d(x, 256, 128, 5, 2,name='dc2')))     ; M(x, 'layer')
-            with tf.variable_scope('deconv3'):                
-                x = tf.nn.relu(batch_norm(deconv2d(x, 128, 64, 5, 2, name='dc3')))      ; M(x, 'layer')
-            with tf.variable_scope('deconv4'):
-                x = tf.nn.relu(batch_norm(deconv2d(x, 64, 3, 5, 2, name='dc4')))       ; M(x, 'layer')
-            with tf.variable_scope('output'):
-                x = tf.tanh(x, name='out')                                        ; M(x, 'layer')
-                # x = tf.nn.sigmoid(deconv2d(x, 64, 3, 5, 2, name='dc4'))     ; M(x, 'layer')
-            tf.identity(x, name='sample')
+    
+    def build_generator(self, x, batch_size):
+        """Output: 64x64x3."""
+        # layer sizes = [96, 256, 256, 128, 64]
+        with tf.variable_scope('fit_and_reshape'):
+        # with tf.variable_scope('fit_and_reshape'):
+            x = tf.nn.relu(batch_norm(dense(x, batch_size, 32*4*4, name='d1')))
+            x = tf.reshape(x, [-1, 4, 4, 32]) # un-flatten
+        with tf.variable_scope('conv1'):
+            x = tf.nn.relu(batch_norm(conv2d(x, 32, 96, 1, name='c1')))            ; M(x, 'layer')
+        with tf.variable_scope('conv2'):                
+            x = tf.nn.relu(batch_norm(conv2d(x, 96, 256, 1, name='c2')))           ; M(x, 'layer')
+        with tf.variable_scope('deconv1'):                
+            x = tf.nn.relu(batch_norm(deconv2d(x, 256, 256, 5, 2, name='dc1')))     ; M(x, 'layer')
+        with tf.variable_scope('deconv2'):                
+            x = tf.nn.relu(batch_norm(deconv2d(x, 256, 128, 5, 2, name='dc2')))     ; M(x, 'layer')
+        with tf.variable_scope('deconv3'):                
+            x = tf.nn.relu(batch_norm(deconv2d(x, 128, 64, 5, 2, name='dc3')))     ; M(x, 'layer')
+        with tf.variable_scope('deconv4'):
+            x = tf.nn.relu(batch_norm(deconv2d(x, 64, 3, 5, 2, name='dc4')))       ; M(x, 'layer')
+        with tf.variable_scope('output'):
+            x = tf.tanh(x, name='out')                                             ; M(x, 'layer')
+        tf.identity(x, name='sample')
         return x
     
 
-    def _build_discriminator(self, x):
-        # with tf.variable_scope('discriminator') as scope:
-            # layer sizes = [64, 128, 256, 256, 96]
+    def build_discriminator(self, x):
+        # layer sizes = [64, 128, 256, 256, 96]
         with tf.variable_scope('conv1'):
-            x = lrelu(conv2d(x, 3, 64, 5, 2, name='c1'))                        ; M(x, 'layer')
+            x = lrelu(conv2d(x, 3, 64, 5, 2, name='c1'))                           ; M(x, 'layer')
         with tf.variable_scope('conv2'):
-            x = lrelu(batch_norm(conv2d(x, 64, 128, 5, 2, name='c2')))          ; M(x, 'layer')
+            x = lrelu(batch_norm(conv2d(x, 64, 128, 5, 2, name='c2')))             ; M(x, 'layer')
         with tf.variable_scope('conv3'):
-            x = lrelu(batch_norm(conv2d(x, 128, 256, 5, 2, name='c3')))         ; M(x, 'layer')
+            x = lrelu(batch_norm(conv2d(x, 128, 256, 5, 2, name='c3')))            ; M(x, 'layer')
         with tf.variable_scope('conv4'):
-            x = lrelu(batch_norm(conv2d(x, 256, 256, 5, 2, name='c4')))         ; M(x, 'layer')
+            x = lrelu(batch_norm(conv2d(x, 256, 256, 5, 2, name='c4')))            ; M(x, 'layer')
         with tf.variable_scope('conv5'):
-            x = lrelu(batch_norm(conv2d(x, 256, 96, 32, 1, name='c5')))         ; M(x, 'layer')
+            x = lrelu(batch_norm(conv2d(x, 256, 96, 32, 1, name='c5')))            ; M(x, 'layer')
         with tf.variable_scope('conv6'):
-            x = lrelu(batch_norm(conv2d(x, 96, 32, 1, name='c6')))              ; M(x, 'layer')
-        with tf.variable_scope('flatten'):
-            logits = flatten(x, name='flat1')
+            x = lrelu(batch_norm(conv2d(x, 96, 32, 1, name='c6')))                 ; M(x, 'layer')
         with tf.variable_scope('logits'):
-            out = tf.nn.sigmoid(logits, name='sig1')                             ; M(out, 'layer')
+            logits = flatten(x, name='flat1')            
+            out = tf.nn.sigmoid(logits, name='sig1')                               ; M(out, 'layer')
         tf.identity(out, name='sample')
-        return out, logits
+        return out
 
-    # The ideal minimum loss for the discriminator is 0.5 - this is where the generated images are indistinguishable from the real images from the perspective of the discriminator.
-
-    def train(self, epoch, x_input, data, batch_size, tb_writer, batch_summary_nodes, epoch_summary_nodes, display=True):
-        epoch_start_time = time.time()
-        n_batches = int(data.train.num_examples/batch_size)
-        summary_freq = int(n_batches / 20)
-        
-        for i in range(n_batches):
-            # train discriminator
-            xs, ys = data.train.next_batch(batch_size)
-            # zs = np.random.normal(0, 1, (batch_size, 512))
-            _, _, dl, gl = self._sess.run([self._disc_optimizer, self._gen_optimizer, self._loss_d, self._loss_g], feed_dict={self._x_input: xs})
-            
-            # _, dl = self._sess.run([self._disc_optimizer, self._loss_d], feed_dict={self._x_input: xs})
-            # _, gl = self._sess.run([self._gen_optimizer, self._loss_g], feed_dict={self._x_input: xs})
-            
-            # _, dl = self._sess.run([self._disc_optimizer, self._loss_d], feed_dict={self._x_input: xs, self._latent: zs})
-            # # train generator
-            # zs = np.random.normal(0, 1, (256, 512))
-            # _, gl = self._sess.run([self._gen_optimizer, self._loss_g], feed_dict={self._latent: zs, self._x_input: xs})
-            print_progress(epoch, batch_size*(i+1), data.train.num_examples, epoch_start_time, {'disc loss': dl, 'gen loss': gl})
-
-            if i % summary_freq == 0:
-                summary = self._sess.run(batch_summary_nodes, feed_dict={self._x_input: xs}) #, self._latent: zs})
-                tb_writer.add_summary(summary, batch_size*(i+1) + (epoch-1)*n_batches*batch_size)
-                
-            
-            # _, l, summary = self._sess.run([self._train_op, self.loss, summary_nodes], feed_dict={x_input: xs})
-            # print_progress(epoch, batch_size*(i+1), data.train.num_examples, epoch_start_time, {'loss': l})
-            # tb_writer.add_summary(summary, i * batch_size + (epoch-1) * n_batches * batch_size)
-            # tb_writer.add_summary(summary2, i * batch_size + (epoch-1) * n_batches * batch_size)
-
-        # epoch summaries
-        summary = self._sess.run(epoch_summary_nodes, feed_dict={self._x_input: xs}) #, self._latent: zs})
-        tb_writer.add_summary(summary, batch_size*(i+1) + (epoch-1)*n_batches*batch_size)
-
-        # # perform validation
-        # results = fold(self._sess, x_input, [self.loss], data.validation, batch_size, int(data.validation.num_examples/batch_size))
-        # stdout.write(', validation: {:.4f}\r\n'.format(results[0]))
-        stdout.write('\r\n')
 
 
 
