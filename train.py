@@ -39,8 +39,8 @@ def init_input(sess, args): #dataset, grayscale=False):
                 # x_input = tf.placeholder("float", [None, 784], name='x_input')
             elif args.dataset == 'floorplans':
                 x_input = tf.placeholder("float", [args.batch_size * args.n_gpus, 64, 64, 3], name='x_input')
-                # x = tf.map_fn(lambda img: tf.image.per_image_standardization(img), x_input)
-                x = tf.identity(x_input, name='x')
+                x = tf.map_fn(lambda img: tf.image.per_image_standardization(img), x_input)
+                x = tf.identity(x, name='x')
                 
                 # x_input = tf.placeholder("float", [None, 64, 64, 3], name='x_input')
                 # x = tf.image.rgb_to_grayscale(x_input, name='x') if args.grayscale else tf.identity(x_input, name='x')
@@ -110,9 +110,9 @@ if __name__ == '__main__':
 
     # setup model
     
-    with tf.variable_scope('model'):
-        if args.model == 'gan':
-            model = GAN(x, global_step, args)
+    # with tf.variable_scope('model'):
+    if args.model == 'gan':
+        model = GAN(x, global_step, args)
     train_op = model.train_op
     losses = collection_to_dict(tf.get_collection('losses'))
     # losses = collection_to_dict(tf.get_collection('losses', scope='model'))    
@@ -174,6 +174,7 @@ if __name__ == '__main__':
             _, l = sess.run([train_op, losses], {x_input: xs})
             print_progress(epoch, args.n_gpus*args.batch_size*(i+1), data.train.num_examples, epoch_start_time, l)
 
+
             # batch_summaries
             if i % summary_freq == 0:
                 results = sess.run(model.summary_op, {x_input: xs})
@@ -193,7 +194,7 @@ if __name__ == '__main__':
 
             
         # snapshot
-        stdout.write('\tWriting snapshot to disk...')
+        stdout.write('\n\tWriting snapshot to disk...')
         chkfile = path.join(args.dir, 'checkpoints', 'epoch_{:03d}.ckpt'.format(epoch))
         saver.save(sess, chkfile, global_step=global_step)
         stdout.write('complete!\r\n')

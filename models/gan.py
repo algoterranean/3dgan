@@ -18,7 +18,7 @@ class GAN(Model):
     Gradients are collected on the CPU, averaged, and applied back to each GPU."""
 
 
-    def __init__(self, x, global_step, args): #batch_size, latent_size, g_opt, d_opt):
+    def __init__(self, x, global_step, args):
         with tf.device('/cpu:0'):
             # store optimizer and grads on CPU
             with tf.variable_scope('optimizers'):
@@ -31,7 +31,7 @@ class GAN(Model):
             d_tower_grads = []
 
             # build model on each GPU
-            with tf.variable_scope(tf.get_variable_scope()):
+            with tf.variable_scope('model'): # tf.get_variable_scope()):
                 for gpu_id in range(args.n_gpus):
                     with tf.device('/gpu:{}'.format(gpu_id)):
                         with tf.name_scope('TOWER_{}'.format(gpu_id)) as scope:
@@ -54,6 +54,7 @@ class GAN(Model):
                             summaries = tf.get_collection(tf.GraphKeys.SUMMARIES, scope)
 
                             # compute and collect gradients for generator and discriminator
+                            # restrict optimizer to vars for each component
                             params = tf.trainable_variables()
                             g_vars = [i for i in params if 'generator' in i.name]
                             d_vars = [i for i in params if 'discriminator' in i.name]
@@ -65,123 +66,57 @@ class GAN(Model):
                             g_tower_grads.append(g_grads)
                             d_tower_grads.append(d_grads)
 
-            # average the gradients back on the CPU
-            with tf.variable_scope('average_gradients'):
-                with tf.variable_scope('generator'):
-                    g_grads = average_gradients(g_tower_grads)
-                with tf.variable_scope('discriminator'):
-                    d_grads = average_gradients(d_tower_grads)
+            with tf.variable_scope('training'):
+                # average the gradients back on the CPU
+                with tf.variable_scope('average_gradients'):
+                    with tf.variable_scope('generator'):
+                        g_grads = average_gradients(g_tower_grads)
+                    with tf.variable_scope('discriminator'):
+                        d_grads = average_gradients(d_tower_grads)
+                        
+                # apply the gradients
+                with tf.variable_scope('apply_gradients'):
+                    with tf.variable_scope('generator'):
+                        g_apply_gradient_op = g_opt.apply_gradients(g_grads, global_step=global_step)
+                    with tf.variable_scope('discriminator'):
+                        d_apply_gradient_op = d_opt.apply_gradients(d_grads, global_step=global_step)
+                        
+                # group training ops together
+                with tf.variable_scope('train_op'):
+                    self.train_op = tf.group(g_apply_gradient_op, d_apply_gradient_op)  
 
             # add summaries for the gradients
             for grad, var in g_grads + d_grads:
                 if grad is not None:
                     summaries.append(tf.summary.histogram(var.op.name + '/gradients', grad))
 
-            # actually apply the gradients. these are our training op
-            with tf.variable_scope('apply_gradients'):
-                with tf.variable_scope('generator'):
-                    g_apply_gradient_op = g_opt.apply_gradients(g_grads, global_step=global_step)
-                with tf.variable_scope('discriminator'):
-                    d_apply_gradient_op = d_opt.apply_gradients(d_grads, global_step=global_step)
-
-            # # todo
-            # for var in tf.trainable_variables():
-            #     summaries.append(tf.summary.histogram(var.op.name, var))
-            
-            # variable_averages = tf.train.ExponentialMovingAverage(0.9999, global_step)
-            # variable_averages_op = variable_averages.apply(tf.trainable_variables())
-
-            # group training ops together
-            with tf.variable_scope('train_op'):
-                self.train_op = tf.group(g_apply_gradient_op, d_apply_gradient_op) #, variable_averages_op)
-
             # collection all summary ops
             self.summary_op = tf.summary.merge(summaries)
 
-                                
-                            
-            #                 # latent
-            #                 with tf.variable_scope('latent'):
-            #                     z = self.build_latent(args.batch_size, args.latent_size)
-            #                 # generator
-            #                 with tf.variable_scope('generator'):
-            #                     g = self.build_generator(z, args.latent_size)
-            #                 # discriminator
-            #                 with tf.variable_scope('discriminator'):
-            #                     # x = input, so restrict data to a slice for this particular gpu
-            #                     d_real = self.build_discriminator(x[gpu_id * args.batch_size:(gpu_id+1)*args.batch_size,:])
-            #                 with tf.variable_scope('discriminator', reuse=True):
-            #                     d_fake = self.build_discriminator(g)
-            #                 tf.summary.image('real_images', x, collections=['epoch'])
-            #                 tf.summary.image('fake_images', g, collections=['epoch'])
-                            
-            
-            #                 # losses
-            #                 with tf.variable_scope('losses'):
-            #                     # need to maximize this, but TF only does minimization, so we use negative
-            #                     with tf.variable_scope('generator'):
-            #                         g_loss = tf.reduce_mean(-tf.log(d_fake + 1e-8), name='g_loss')
-            #                     with tf.variable_scope('discriminator'):
-            #                         d_loss = tf.reduce_mean(-tf.log(d_real + 1e-8) - tf.log(1 - d_fake + 1e-8), name='d_loss')
-            #                 tf.add_to_collection('losses', g_loss)
-            #                 tf.add_to_collection('losses', d_loss)
-            #                 tf.summary.scalar('loss_g', g_loss)
-            #                 tf.summary.scalar('loss_d', d_loss)
-
-                            
-
-
-            #                 g_vars = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope='model/generator')
-            #                 d_vars = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope='model/discriminator')
-
-            #                 vs = tf.get_variable_scope()
-            #                 print('INSIDe variable scope:', 'name', vs.name, 'reuse', vs.reuse, vs) 
-            #                 tf.get_variable_scope().reuse_variables()
-                            
-            #                 with tf.variable_scope('gradients'):
-            #                     with tf.variable_scope('generator'):
-            #                         g_grads  = g_opt.compute_gradients(g_loss, g_vars)
-            #                     with tf.variable_scope('discriminator'):
-            #                         d_grads = d_opt.compute_gradients(d_loss, d_vars)
-            #                 g_tower_grads.append(g_grads)
-            #                 d_tower_grads.append(d_grads)
-                    
-            # vs = tf.get_variable_scope()
-            # print('variable scope:', 'name', vs.name, 'reuse', vs.reuse, vs) 
-            # # back on CPU
-            # with tf.variable_scope('average_gradients'):
-            #     with tf.variable_scope('generator'):
-            #         g_grads = average_gradients(g_tower_grads)
-            #     with tf.variable_scope('discriminator'):
-            #         d_grads = average_gradients(d_tower_grads)
-            # with tf.variable_scope('apply_gradients'):
-            #     with tf.variable_scope('generator'):
-            #         vs = tf.get_variable_scope()
-            #         print('APPLY variable scope:', 'name', vs.name, 'reuse', vs.reuse, vs)                     
-            #         g_apply_gradient_op = g_opt.apply_gradients(g_grads, global_step=global_step)
-            #     with tf.variable_scope('discriminator'):
-            #         d_apply_gradient_op = d_opt.apply_gradients(d_grads, global_step=global_step)
-    
-            # self.train_op = tf.group(g_apply_gradient_op, d_apply_gradient_op)
-
-
     
     def construct_model(self, x, args, gpu_id):
+        """Constructs the inference and loss portion of the model.
+        Returns a list of form (latent, generator, real discriminator, 
+        fake discriminator), where each is the final output node of each 
+        component. """
+        
         # latent
         with tf.variable_scope('latent'):
             z = self.build_latent(args.batch_size, args.latent_size)
+            
         # generator
         with tf.variable_scope('generator'):
             g = self.build_generator(z, args.latent_size)
+            
         # discriminator
-        with tf.variable_scope('discriminator'):
+        with tf.variable_scope('discriminator') as scope:
             # x = input, so restrict data to a slice for this particular gpu
             d_real = self.build_discriminator(x[gpu_id * args.batch_size:(gpu_id+1)*args.batch_size,:])
-        with tf.variable_scope('discriminator', reuse=True):
+            scope.reuse_variables()
             d_fake = self.build_discriminator(g)
             
-        tf.summary.image('real_images', x, collections=['epoch'])
-        tf.summary.image('fake_images', g, collections=['epoch'])
+        # tf.summary.image('real_images', x, collections=['epoch'])
+        # tf.summary.image('fake_images', g, collections=['epoch'])
 
         # losses
         with tf.variable_scope('losses'):
@@ -192,8 +127,7 @@ class GAN(Model):
                 d_loss = tf.reduce_mean(-tf.log(d_real + 1e-8) - tf.log(1 - d_fake + 1e-8), name='d_loss')
         tf.add_to_collection('losses', g_loss)
         tf.add_to_collection('losses', d_loss)
-        # tf.summary.scalar('loss_g', g_loss)
-        # tf.summary.scalar('loss_d', d_loss)
+        
         return (z, g, d_real, d_fake)
     
         
@@ -208,7 +142,6 @@ class GAN(Model):
         """Output: 64x64x3."""
         # layer sizes = [96, 256, 256, 128, 64]
         with tf.variable_scope('fit_and_reshape'):
-        # with tf.variable_scope('fit_and_reshape'):
             x = tf.nn.relu(batch_norm(dense(x, batch_size, 32*4*4, name='d1')))
             x = tf.reshape(x, [-1, 4, 4, 32]) # un-flatten
         with tf.variable_scope('conv1'):
@@ -244,13 +177,14 @@ class GAN(Model):
         with tf.variable_scope('conv6'):
             x = lrelu(batch_norm(conv2d(x, 96, 32, 1, name='c6')))                 ; self.activation_summary(x)
         with tf.variable_scope('logits'):
-            logits = flatten(x, name='flat1')            
+            logits = flatten(x, name='flat1')
             out = tf.nn.sigmoid(logits, name='sig1')                               ; self.activation_summary(out)
         tf.identity(out, name='sample')
         return out
 
     def tensor_name(self, x):
-        return re.sub('{}_[0-9]*/'.format('TOWER'), '', x.op.name)
+        return x.op.name
+        # return re.sub('{}_[0-9]*/'.format('TOWER'), '', x.op.name)
 
     def activation_summary(self, x):
         n = self.tensor_name(x)
