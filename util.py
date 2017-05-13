@@ -275,7 +275,7 @@ def save_settings(sess, args):
         
 def reload_session(dir, fn=None):
     tf.reset_default_graph()
-    sess = tf.Session()
+    sess = tf.Session(config=tf.ConfigProto(allow_soft_placement=True))
     saver = tf.train.import_meta_graph(os.path.join(dir, 'model'))
     if fn is None:
         chk_file = tf.train.latest_checkpoint(os.path.join(dir, 'checkpoints'))

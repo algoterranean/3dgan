@@ -157,7 +157,7 @@ def visualize_timelapse(workspace_dir, example_images, grayscale=False, every=1)
             sess = reload_session(workspace_dir, os.path.join(workspace_dir, 'checkpoints', f))
             graph = tf.get_default_graph()
             x_input = graph.as_graph_element('inputs/x_input').outputs[0]
-            y_hat = graph.as_graph_element('model/decoder/sample').outputs[0]
+            y_hat = graph.as_graph_element('model/model/TOWER_0/generator/sample').outputs[0]
             # y_hat = graph.as_graph_element('outputs/y_hat').outputs[0]
         
             results = sess.run(y_hat, feed_dict={x_input: example_images})
@@ -184,8 +184,10 @@ def visualize_samples(workspace_dir, example_images, only_recent=False):
         print('loading checkpoint', f)
         sess = reload_session(workspace_dir, os.path.join(workspace_dir, 'checkpoints', f))
         graph = tf.get_default_graph()
-        output = graph.as_graph_element('model/decoder/sample').outputs[0]
-        latent = graph.as_graph_element('model/latent/sample').inputs[0]
+        output = graph.as_graph_element('TOWER_0/generator/sample').outputs[0]
+        # output = graph.as_graph_element('model/decoder/sample').outputs[0]
+        latent = graph.as_graph_element('TOWER_0/latent/sample').inputs[0]
+        # latent = graph.as_graph_element('model/latent/sample').inputs[0]
         x_input = graph.as_graph_element('inputs/x_input').outputs[0]
         
         # results = sess.run(output, feed_dict={latent: sampled_mu, x_input: example_images})
@@ -292,7 +294,7 @@ if __name__ == '__main__':
     #         ex2[i] = cv2.cvtColor(np.squeeze(example_images[i]), cv2.COLOR_BGR2GRAY)
     #     example_images = ex2
     print('Loading model and checkpoint...')
-    sess = reload_session(args.dir)        
+    sess = reload_session(args.dir)
 
 
     ################################################

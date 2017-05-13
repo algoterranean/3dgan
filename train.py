@@ -39,8 +39,8 @@ def init_input(sess, args): #dataset, grayscale=False):
                 # x_input = tf.placeholder("float", [None, 784], name='x_input')
             elif args.dataset == 'floorplans':
                 x_input = tf.placeholder("float", [args.batch_size * args.n_gpus, 64, 64, 3], name='x_input')
-                x = tf.map_fn(lambda img: tf.image.per_image_standardization(img), x_input)
-                x = tf.identity(x, name='x')
+                # x = tf.map_fn(lambda img: tf.image.per_image_standardization(img), x_input)
+                x = tf.identity(x_input, name='x')
                 
                 # x_input = tf.placeholder("float", [None, 64, 64, 3], name='x_input')
                 # x = tf.image.rgb_to_grayscale(x_input, name='x') if args.grayscale else tf.identity(x_input, name='x')
@@ -109,6 +109,7 @@ if __name__ == '__main__':
     x, x_input = init_input(sess, args)
 
     # setup model
+    
     with tf.variable_scope('model'):
         if args.model == 'gan':
             model = GAN(x, global_step, args)
@@ -175,13 +176,14 @@ if __name__ == '__main__':
 
             # batch_summaries
             if i % summary_freq == 0:
-                results = sess.run(batch_summaries, {x_input: xs})
+                results = sess.run(model.summary_op, {x_input: xs})
+                # results = sess.run(batch_summaries, {x_input: xs})
                 tb_writer.add_summary(results, args.batch_size*(i+1) + (epoch-1)*n_trbatches*args.batch_size)
 
-        # epoch summaries
-        results = sess.run(epoch_summaries, {x_input: xs})
-        tb_writer.add_summary(results, args.batch_size*(i+1) + (epoch-1)*n_trbatches*args.batch_size)
-        # print('\n')
+        # # epoch summaries
+        # results = sess.run(epoch_summaries, {x_input: xs})
+        # tb_writer.add_summary(results, args.batch_size*(i+1) + (epoch-1)*n_trbatches*args.batch_size)
+        # # print('\n')
 
             
         # # perform validation
