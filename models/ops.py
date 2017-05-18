@@ -7,33 +7,37 @@ from tensorflow.contrib.layers import batch_norm
 def lrelu(x, leak=0.2, name='lrelu'):
     f1 = 0.5 * (1 + leak)
     f2 = 0.5 * (1 - leak)
-    return f1 * x + f2 * abs(x)
+    out = f1 * x + f2 * abs(x)
+    return tf.identity(out, name=name)
 
 
-def dense(x, input_size, output_size, name=None):
+
+def dense(x, input_size, output_size, reuse=False, name=None):
     w_name = name if name is None else name + '_w'
     b_name = name if name is None else name + '_b'
 
     # input_size = inttf.shape(x)[1])
     # var_shape = tf.stack([input_size, output_size])
 
-    W = tf.get_variable(name=w_name, shape=[input_size, output_size], initializer=he_init())
-    # W = tf.Variable(tf.random_normal([input_size, output_size]))
-    # b = tf.Variable(tf.random_normal([output_size]))
-    b = tf.get_variable(name=b_name, shape=[output_size], initializer=he_init())
+    # with tf.device('/cpu:0'):
+    with tf.variable_scope('vars', reuse=reuse):            
+        W = tf.get_variable(name=w_name, shape=[input_size, output_size], initializer=he_init())
+        b = tf.get_variable(name=b_name, shape=[output_size], initializer=he_init())
     return tf.matmul(x, W) + b
                         
 
-def conv2d(x, input_size, output_size, ksize=3, stride=1, name=None):
+def conv2d(x, input_size, output_size, ksize=3, stride=1, reuse=False, name=None):
     w_name = name if name is None else name + '_w'
     b_name = name if name is None else name + '_b'
     
     # if not name is None:
-    K = tf.get_variable(name=w_name, shape=[ksize, ksize, input_size, output_size], initializer=he_init())
-    b = tf.get_variable(name=b_name, shape=[output_size], initializer=he_init())
+    # with tf.device('/cpu:0'):
+    with tf.variable_scope('vars', reuse=reuse):
+        K = tf.get_variable(name=w_name, shape=[ksize, ksize, input_size, output_size], initializer=he_init())
+        b = tf.get_variable(name=b_name, shape=[output_size], initializer=he_init())
     # else:
     #     K = tf.Variable(tf.truncated_normal([ksize, ksize, input_size, output_size], stddev=0.1)) #, name=name))
-    #     b = tf.Variable(tf.truncated_normal([output_size]))        
+    #     b = tf.Variable(tf.truncated_normal([output_size]))
     h = tf.nn.conv2d(x, K, strides=[1, stride, stride, 1], padding='SAME')
     # return batch_norm(h+b)
     # print('created var', name)
@@ -45,11 +49,13 @@ def upsize(x, factor, output_size):
     return tf.stack([input_shape[0], input_shape[1]*2, input_shape[2]*2, output_size])
     
     
-def deconv2d(x, input_size, output_size, ksize=3, stride=2, name=None):
+def deconv2d(x, input_size, output_size, ksize=3, stride=2, reuse=False, name=None):
     w_name = name if name is None else name + '_w'
     b_name = name if name is None else name + '_b'
-    K = tf.get_variable(name=w_name, shape=[ksize, ksize, output_size, input_size], initializer=he_init())
-    b = tf.get_variable(name=b_name, shape=[output_size], initializer=he_init())
+    # with tf.device('/cpu:0'):
+    with tf.variable_scope('vars', reuse=reuse):
+        K = tf.get_variable(name=w_name, shape=[ksize, ksize, output_size, input_size], initializer=he_init())
+        b = tf.get_variable(name=b_name, shape=[output_size], initializer=he_init())
     
     # K = tf.Variable(tf.truncated_normal([ksize, ksize, output_size, input_size], stddev=0.1))
     h = tf.nn.conv2d_transpose(x, K, output_shape=upsize(x, 2, output_size), strides=[1, stride, stride, 1], padding='SAME')

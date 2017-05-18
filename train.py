@@ -39,8 +39,8 @@ def init_input(sess, args): #dataset, grayscale=False):
                 # x_input = tf.placeholder("float", [None, 784], name='x_input')
             elif args.dataset == 'floorplans':
                 x_input = tf.placeholder("float", [args.batch_size * args.n_gpus, 64, 64, 3], name='x_input')
-                x = tf.map_fn(lambda img: tf.image.per_image_standardization(img), x_input)
-                x = tf.identity(x, name='x')
+                # x = tf.map_fn(lambda img: tf.image.per_image_standardization(img), x_input)
+                x = tf.identity(x_input, name='x')
                 
                 # x_input = tf.placeholder("float", [None, 64, 64, 3], name='x_input')
                 # x = tf.image.rgb_to_grayscale(x_input, name='x') if args.grayscale else tf.identity(x_input, name='x')
@@ -75,6 +75,7 @@ if __name__ == '__main__':
     parser.add_argument('--centered',    default=False, action='store_true')
     parser.add_argument('--n_gpus',      type=int, default=1)
     parser.add_argument('--latent_size', type=int, default=200)
+    parser.add_argument('--debug_graph', default=False, action='store_true')
     args = parser.parse_args()
 
     # TODO: should keep the args that were passed in this time, but not all of them?
@@ -136,6 +137,10 @@ if __name__ == '__main__':
     total_params = visualize_parameters()
     print('Total params: {}'.format(total_params))
 
+    
+    if args.debug_graph:
+        sys.exit()
+
     # dataset
     debug('Loading dataset...')
     data = get_dataset(args.dataset)
@@ -175,11 +180,25 @@ if __name__ == '__main__':
             print_progress(epoch, args.n_gpus*args.batch_size*(i+1), data.train.num_examples, epoch_start_time, l)
 
 
+
             # batch_summaries
             if i % summary_freq == 0:
                 results = sess.run(model.summary_op, {x_input: xs})
                 # results = sess.run(batch_summaries, {x_input: xs})
                 tb_writer.add_summary(results, args.batch_size*(i+1) + (epoch-1)*n_trbatches*args.batch_size)
+                
+                # results = sess.run(tf.concat(tf.unstack(model.g, num=args.batch_size, axis=0)[0:10], axis=0), {x_input: xs})
+                # print('got results')
+                # print(results.shape)
+
+                # print(results)
+                # print(len(results))
+
+
+
+
+
+
 
         # # epoch summaries
         # results = sess.run(epoch_summaries, {x_input: xs})

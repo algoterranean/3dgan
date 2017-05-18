@@ -184,9 +184,9 @@ def visualize_samples(workspace_dir, example_images, only_recent=False):
         print('loading checkpoint', f)
         sess = reload_session(workspace_dir, os.path.join(workspace_dir, 'checkpoints', f))
         graph = tf.get_default_graph()
-        output = graph.as_graph_element('TOWER_0/generator/sample').outputs[0]
+        output = graph.as_graph_element('model/tower_0/generator/sample').outputs[0]
         # output = graph.as_graph_element('model/decoder/sample').outputs[0]
-        latent = graph.as_graph_element('TOWER_0/latent/sample').inputs[0]
+        latent = graph.as_graph_element('model/tower_0/latent/sample').inputs[0]
         # latent = graph.as_graph_element('model/latent/sample').inputs[0]
         x_input = graph.as_graph_element('inputs/x_input').outputs[0]
         
