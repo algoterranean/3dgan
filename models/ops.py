@@ -69,7 +69,6 @@ def flatten(x, name=None):
     return tf.reshape(x, [-1, output_size], name=name)
 
 
-
 def L(x):
     """Mark this op as a layer."""
     tf.add_to_collection('layers', x)
@@ -86,12 +85,3 @@ def M(x, collection):
     # tf.summary.image(x.op.name + '/activations', x, collections=['epoch'])
     return x
 
-
-# def activation_summary(x):
-#     tf.summary.histogram(x.op.name + '/activations', x, collections=['epoch'])
-#     tf.summary.scalar(x.op.name + '/sparsity', tf.nn.zero_fraction(x), collections=['epoch'])
-    
-    
-# def activation_summary(x):
-#     tf.summary.image(x.op.name + '/activations', x, collections=['epoch'])
-#     tf.summary.scalar(x.op.name + '/sparsity', tf.nn.zero_fraction(x), collections=['epoch'])

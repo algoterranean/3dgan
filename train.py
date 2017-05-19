@@ -52,6 +52,32 @@ def init_input(sess, args): #dataset, grayscale=False):
 
 
 
+def read_and_decode(filename_queue):
+    features_def = {'height': tf.FixedLenFeature([], tf.int64),
+                    'width': tf.FixedLenFeature([], tf.int64),
+                    'image_raw': tf.FixedLenFeature([], tf.string)}
+    reader = tf.TFRecordReader()
+    _, serialized_example = reader.read(filename_queue)
+    features = tf.parse_single_example(serialized_example, features=feature_def)
+    image = tf.decode_raw(features['image_raw'], tf.uint8)
+    image.set_shape([64, 64, 3])
+    image = tf.cast(image, tf.float32) * (1.0 / 255.0)  # - 0.5
+    return image
+
+
+def inputs(batch_size, num_epochs):
+    filename = os.path.join('data', 'floorplans.64.train.tfrecords')
+    with tf.name_scope('input_queue'):
+        filename_queue = tf.train.string_input_producer([filename], num_epochs=num_epochs)
+        image = read_and_decode(filename_queue)
+        images = tf.train.shuffle_batch([image], batch_size=batch_size, num_threads=4, capacity=1000+3*batch_size, min_after_queue=1000)
+    return images
+
+
+
+
+
+
 
 if __name__ == '__main__':
     # command line arguments
@@ -104,10 +130,11 @@ if __name__ == '__main__':
         with tf.variable_scope('global_vars'):
             global_step = tf.Variable(0, name='global_step', trainable=False)
             global_epoch = tf.Variable(0, name='global_epoch', trainable=False)
-            global_batch_size = tf.Variable(args.batch_size, name='global_batch_size', trainable=False)    
+            global_batch_size = tf.Variable(args.batch_size, name='global_batch_size', trainable=False)
 
     # setup input nodes (including any image filters)
-    x, x_input = init_input(sess, args)
+    x = inputs(args.batch_size, args.epochs)
+    # x, x_input = init_input(sess, args)
 
     # setup model
     
@@ -176,14 +203,14 @@ if __name__ == '__main__':
             #     x_batch, y_batch = data.train.next_batch(args.batch_size)    
             #     xs.append(x_batch)
             
-            _, l = sess.run([train_op, losses], {x_input: xs})
+            _, l = sess.run([train_op, losses]) #, {x_input: xs})
             print_progress(epoch, args.n_gpus*args.batch_size*(i+1), data.train.num_examples, epoch_start_time, l)
 
 
 
             # batch_summaries
             if i % summary_freq == 0:
-                results = sess.run(model.summary_op, {x_input: xs})
+                results = sess.run(model.summary_op) #, {x_input: xs})
                 # results = sess.run(batch_summaries, {x_input: xs})
                 tb_writer.add_summary(results, args.batch_size*(i+1) + (epoch-1)*n_trbatches*args.batch_size)
                 

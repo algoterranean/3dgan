@@ -20,14 +20,11 @@ def average_gradients(tower_grads):
         for g, _ in grad_and_vars:
             # Add 0 dimension to the gradients to represent the tower.
             expanded_g = tf.expand_dims(g, 0)
-
             # Append on a 'tower' dimension which we will average over below.
             grads.append(expanded_g)
-
         # Average over the 'tower' dimension.
         grad = tf.concat(grads, 0)
         grad = tf.reduce_mean(grad, 0)
-
         # Keep in mind that the Variables are redundant because they are shared
         # across towers. So .. we will just return the first tower's pointer to
         # the Variable.
@@ -35,62 +32,6 @@ def average_gradients(tower_grads):
         grad_and_var = (grad, v)
         average_grads.append(grad_and_var)
     return average_grads
-
-
-# def average_gradients(tower_grads):
-#     average_grads = []
-#     for grad_and_vars in zip(*tower_grads):
-#         grads = []
-#         for g, v in grad_and_vars:
-#             if g is not None:
-#                 expanded_g = tf.expand_dims(g, 0)
-#                 grads.append(expanded_g)
-#             # else:
-#             #     print('grads/vars is none:', g, v)
-#         # print('GRAD COUNT', len(grads), v)
-#         if len(grads) > 0:
-#             grad = tf.concat(grads, 0)
-#             grad = tf.reduce_mean(grad, 0)
-#             v = grad_and_vars[0][1]
-#             grad_and_var = (grad, v)
-#             average_grads.append(grad_and_var)
-#     return average_grads
-
-
-# def average_gradients(tower_grads):
-#   """Calculate the average gradient for each shared variable across all towers.
-#   Note that this function provides a synchronization point across all towers.
-#   Args:
-#     tower_grads: List of lists of (gradient, variable) tuples. The outer list
-#       is over individual gradients. The inner list is over the gradient
-#       calculation for each tower.
-#   Returns:
-#      List of pairs of (gradient, variable) where the gradient has been averaged
-#      across all towers.
-#   """
-#   average_grads = []
-#   for grad_and_vars in zip(*tower_grads):
-#     # Note that each grad_and_vars looks like the following:
-#     #   ((grad0_gpu0, var0_gpu0), ... , (grad0_gpuN, var0_gpuN))
-#     grads = []
-#     for g, _ in grad_and_vars:
-#       # Add 0 dimension to the gradients to represent the tower.
-#       expanded_g = tf.expand_dims(g, 0)
-
-#       # Append on a 'tower' dimension which we will average over below.
-#       grads.append(expanded_g)
-
-#     # Average over the 'tower' dimension.
-#     grad = tf.concat(0, grads)
-#     grad = tf.reduce_mean(grad, 0)
-
-#     # Keep in mind that the Variables are redundant because they are shared
-#     # across towers. So .. we will just return the first tower's pointer to
-#     # the Variable.
-#     v = grad_and_vars[0][1]
-#     grad_and_var = (grad, v)
-#     average_grads.append(grad_and_var)
-#   return average_grads
 
 
 def init_optimizer(args):
@@ -172,7 +113,6 @@ def visualize_parameters():
     #     if c.name.split('/')[0] == 'inputs':
     #         print(c)
         
-
     categories = {}
     for c in tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope='model'):
         cat = c.name.split('/')[1]
@@ -188,15 +128,12 @@ def visualize_parameters():
             shape = item.get_shape()
             print('\t{}, shape: {}'.format(item.name.split('/')[-1], shape))
 
-
     categories = {}
     for c in tf.get_collection('layer'):
         cat = c.name.split('/')[1]
         if not cat in categories:
             categories[cat] = []
         categories[cat].append(c)
-
-        
 
     print('\nModel layers:')
     print('=' * 40)
@@ -206,14 +143,11 @@ def visualize_parameters():
             shape = item.get_shape()
             print('\t{}, shape: {}'.format(item.name.split('/')[-1], shape))
 
-        
-
+    return total_params
     
     # for c in collection:
     #     print(c.name, c.get_shape())
     
-
-
 
     # collection = tf.get_collection('layer', scope='model/encoder')
     # # collection.sort(key=lambda x: x.name)
@@ -249,7 +183,7 @@ def visualize_parameters():
     #     # print('\tConsumers:', tensor.consumers())
         
 
-    return total_params
+    # return total_params
     
 
         
@@ -273,7 +207,6 @@ def debug(*args):
     else:
         print(BOLD + OKBLUE + str(args[0]), ENDC)
 
-
     
 def fold(sess, x_input, ops, data, batch_size, num_batches):
     """Runs each op on the data in batches and returns the average value for each op."""
@@ -296,7 +229,6 @@ def save_settings(sess, args):
         tf.train.export_meta_graph(os.path.join(args.dir, 'model'))
 
 
-        
 def reload_session(dir, fn=None):
     tf.reset_default_graph()
     sess = tf.Session(config=tf.ConfigProto(allow_soft_placement=True))
