@@ -9,8 +9,10 @@ from .ops import dense, conv2d, deconv2d, lrelu, flatten, M
 from util import print_progress, fold, average_gradients, init_optimizer
 
 from tensorflow import variable_scope as var_scope, name_scope as name_scope
+from tensorflow.nn import relu
 
-
+# batch norm info:
+# https://github.com/tensorflow/tensorflow/issues/4361
 
 class GAN(Model):
     """Vanilla Generative Adversarial Network with multi-GPU support.
@@ -69,11 +71,11 @@ class GAN(Model):
                             # d_vars = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope='model/discriminator')
 
                             # compute and collect gradients for generator and discriminator
-                            # restrict optimizer to vars for each component                            
+                            # restrict optimizer to vars for each component
                             params = tf.trainable_variables()
                             g_vars = [i for i in params if 'generator' in i.name]
                             d_vars = [i for i in params if 'discriminator' in i.name]
-                            
+
                             with var_scope('compute_gradients'):
                                 with var_scope('generator'):
                                     g_grads = g_opt.compute_gradients(g_loss, var_list=g_vars)
@@ -122,16 +124,15 @@ class GAN(Model):
         # latent
         with var_scope('latent'):
             z = self.build_latent(args.batch_size, args.latent_size)
-            
         # generator
         with var_scope('generator'):
             g = self.build_generator(z, args.latent_size, (gpu_id > 0))
-            
         # discriminator
         with var_scope('discriminator') as dscope:
-            # x = input, so restrict data to a slice for this particular gpu
-            d_real = self.build_discriminator(x[gpu_id * args.batch_size:(gpu_id+1)*args.batch_size,:], (gpu_id>0))
-            # dscope.reuse_variables()
+            # split batch between GPUs
+            with var_scope('sliced_input'):
+                sliced_input = x[gpu_id * args.batch_size:(gpu_id+1)*args.batch_size,:]
+            d_real = self.build_discriminator(sliced_input, (gpu_id>0))
             d_fake = self.build_discriminator(g, True)
             
         # tf.summary.image('real_images', x, collections=['epoch'])
@@ -149,27 +150,16 @@ class GAN(Model):
         
         return (z, g, d_real, d_fake)
     
-        
-        
+            
     def build_latent(self, batch_size, latent_size):
         z = tf.random_normal([batch_size, latent_size], 0, 1)                     ; self.activation_summary(z)
         tf.identity(z, name='sample')
         return z
 
-    def bn(self, x, device = '/cpu:0'):
-        with tf.device(device):
-            bn = batch_norm(x)
-        return bn
-
+    
     def variables_on_cpu(self, gpu_id):
         def helper(op):
-            # print(op.name)
-            # if 'BatchNorm' in op.name:
-            #     return '/gpu:{}'.format(gpu_id)
-            if op.type == "VariableV2":
-                return "/cpu:0"
-            else:
-                return '/gpu:{}'.format(gpu_id)
+            return '/cpu:0' if op.type == 'VariableV2' else '/gpu:{}'.format(gpu_id)
         return helper
 
     
@@ -177,21 +167,21 @@ class GAN(Model):
         """Output: 64x64x3."""
         # layer sizes = [96, 256, 256, 128, 64]
         with var_scope('fit_and_reshape', reuse=reuse):
-            x = tf.nn.relu(batch_norm(dense(x, batch_size, 32*4*4, reuse, name='d1')))
+            x = relu(batch_norm(dense(x, batch_size, 32*4*4, reuse, name='d1')))
             x = tf.reshape(x, [-1, 4, 4, 32]) # un-flatten
         with var_scope('conv1', reuse=reuse):
             b = conv2d(x, 32, 96, 1, reuse=reuse, name='c1')
-            x = tf.nn.relu(batch_norm(b))            ; self.activation_summary(x)
+            x = relu(batch_norm(b))            ; self.activation_summary(x)
         with var_scope('conv2', reuse=reuse):                
-            x = tf.nn.relu(batch_norm(conv2d(x, 96, 256, 1, reuse=reuse, name='c2')))           ; self.activation_summary(x)
+            x = relu(batch_norm(conv2d(x, 96, 256, 1, reuse=reuse, name='c2')))           ; self.activation_summary(x)
         with var_scope('deconv1', reuse=reuse):                
-            x = tf.nn.relu(batch_norm(deconv2d(x, 256, 256, 5, 2, reuse=reuse, name='dc1')))    ; self.activation_summary(x)
+            x = relu(batch_norm(deconv2d(x, 256, 256, 5, 2, reuse=reuse, name='dc1')))    ; self.activation_summary(x)
         with var_scope('deconv2', reuse=reuse):                
-            x = tf.nn.relu(batch_norm(deconv2d(x, 256, 128, 5, 2, reuse=reuse, name='dc2')))    ; self.activation_summary(x)
+            x = relu(batch_norm(deconv2d(x, 256, 128, 5, 2, reuse=reuse, name='dc2')))    ; self.activation_summary(x)
         with var_scope('deconv3', reuse=reuse):                
-            x = tf.nn.relu(batch_norm(deconv2d(x, 128, 64, 5, 2, reuse=reuse, name='dc3')))     ; self.activation_summary(x)
+            x = relu(batch_norm(deconv2d(x, 128, 64, 5, 2, reuse=reuse, name='dc3')))     ; self.activation_summary(x)
         with var_scope('deconv4', reuse=reuse):
-            x = tf.nn.relu(batch_norm(deconv2d(x, 64, 3, 5, 2, reuse=reuse, name='dc4')))       ; self.activation_summary(x)
+            x = relu(batch_norm(deconv2d(x, 64, 3, 5, 2, reuse=reuse, name='dc4')))       ; self.activation_summary(x)
         with var_scope('output'):
             x = tf.tanh(x, name='out')                                                          ; self.activation_summary(x)
         tf.identity(x, name='sample')
