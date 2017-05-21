@@ -1,66 +1,45 @@
+import tensorflow as tf
 import numpy as np
 import h5py
 import sys
 
 
-class Dataset:
-    def __init__(self, dataset):
-        self.dataset = dataset[()]
-        # self.dataset = cv.cvtColor(self.dataset, cv.COLOR_BGR2GRAY)
-        self.current_pos = 0
-        self.num_examples = len(dataset)
-        self.indexes = range(self.num_examples)
 
+class TFRecordsDataset:
+    def __init__(self, filenames, feature_def, image_shape, num_threads=4):
+        """Generates a batches input queue from a list TFRecords files and their
+        corresponding ProtoBuf def."""
+        self.filenames = filenames
+        self.num_threads = num_threads
+        self.feature_def = feature_def
+        self.image_shape = image_shape
 
-    def shuffle(self):
-        x = np.random.rand(self.num_examples)
-        idx_map = np.arange(x.shape[0])
-        np.random.shuffle(idx_map)
-        self.indexes = idx_map
-    
+    def batch_tensor(self, batch_size, num_epochs):
+        with tf.name_scope('input_queue'):
+            filename_queue = tf.train.string_input_producer(self.filenames, num_epochs=num_epochs)
+            image = self._read_and_decode(filename_queue)
+            images = tf.train.shuffle_batch([image],
+                                                batch_size=batch_size,
+                                                num_threads=self.num_threads,
+                                                capacity=3*batch_size+1000,
+                                                min_after_dequeue=1000)
+        return images
 
-    def next_batch(self, batch_size):
-        if self.current_pos + batch_size > self.num_examples:
-            self.current_pos = 0
-        idx = self.indexes[self.current_pos : self.current_pos+batch_size]
-        x = self.dataset[idx]
-        self.current_pos += batch_size
-        return (x, None)
+    def _read_and_decode(self, filename_queue):
+        reader = tf.TFRecordReader()
+        _, serialized_example = reader.read(filename_queue)
+        features = tf.parse_single_example(serialized_example, features=self.feature_def)
+        image = tf.decode_raw(features['image_raw'], tf.uint8)
 
-    @property
-    def images(self):
-        return self.dataset
+        # get size of flattened shape
+        c = 1
+        for i in self.image_shape:
+            c *= i
 
-    @property
-    def labels(self):
-        return None
+        image.set_shape([c])
+        image = tf.reshape(image, self.image_shape)
+        image = tf.cast(image, tf.float32) * (1.0 / 255.0) - 0.5
+        return image
 
-
-# class Floorplans:
-#     def __init__(self):
-#         train_files = '/mnt/research/projects/autoencoders/data/floorplans.64.train.tfrecords'        
-#         validation_files = '/mnt/research/projects/autoencoders/data/floorplans.64.validation.tfrecords'
-#         test_files = '/mnt/research/projects/autoencoders/data/floorplans.64.test.tfrecords'        
-
-
-
-class Floorplans:
-    def __init__(self, root_dir='/mnt/research/datasets/floorplans/'):
-        # self.test = Dataset(os.path.join(root_dir, 'test_set.txt'))
-        # self.train = Dataset(os.path.join(root_dir, 'train_set.txt'))
-        # self.validation = Dataset(os.path.join(root_dir, 'validation_set.txt'))
-        
-        self.file = h5py.File("/mnt/research/projects/hem/datasets/floorplan_64_float32.hdf5", 'r')
-        self.test = Dataset(self.file['test/images'])
-        self.train = Dataset(self.file['train/images'])
-        self.validation = Dataset(self.file['validation/images'])
-
-
-
-if __name__ == '__main__':
-    f = Floorplans()
-    print('Train size:', len(f.train.images))    
-    print('Test size:', len(f.test.images))
-    print('Validation size:', len(f.validation.images))
 
     

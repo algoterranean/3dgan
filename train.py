@@ -24,7 +24,7 @@ from models.vae import VAE
 from models.gan import GAN
 from models.vaegan import VAEGAN
 from msssim import MultiScaleSSIM, tf_ssim, tf_ms_ssim
-from data import Floorplans
+# from data import Floorplans
 from util import *
 
 
@@ -52,33 +52,6 @@ from util import *
 #         tf.add_to_collection('inputs', x)
 #         tf.add_to_collection('inputs', x_input)
 #     return x, x_input
-
-
-
-def read_and_decode(filename_queue):
-    feature_def = {'height': tf.FixedLenFeature([], tf.int64),
-                    'width': tf.FixedLenFeature([], tf.int64),
-                    'image_raw': tf.FixedLenFeature([], tf.string)}
-    reader = tf.TFRecordReader()
-    _, serialized_example = reader.read(filename_queue)
-    features = tf.parse_single_example(serialized_example, features=feature_def)
-    image = tf.decode_raw(features['image_raw'], tf.uint8)
-    image.set_shape([64*64*3])
-    image = tf.reshape(image, [64, 64, 3])
-    image = tf.cast(image, tf.float32) * (1.0 / 255.0)  # - 0.5
-    return image
-
-
-def inputs(batch_size, num_epochs):
-    filename = os.path.join('data', 'floorplans.64.train.tfrecords')
-    with tf.name_scope('input_queue'):
-        filename_queue = tf.train.string_input_producer([filename], num_epochs=num_epochs)
-        image = read_and_decode(filename_queue)
-        images = tf.train.shuffle_batch([image], batch_size=batch_size, num_threads=4, capacity=1000+3*batch_size, min_after_dequeue=1000)
-    return images
-
-
-
 
 
 
@@ -136,8 +109,12 @@ if __name__ == '__main__':
                 v = getattr(args, a)
                 tf.Variable(v, name=a, trainable=False)
 
+        
+
     # setup input pipeline
-    x = inputs(args.batch_size * args.n_gpus, args.epochs)
+    d = get_dataset(args.dataset)
+    x = d.batch_tensor(args.batch_size * args.n_gpus, args.epochs)
+    # x = inputs(args.batch_size * args.n_gpus, args.epochs)
 
     # setup model
     debug('Initializing model...')

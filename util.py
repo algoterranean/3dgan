@@ -8,7 +8,8 @@ import shutil
 import time
 import pickle 
 # local
-from data import Floorplans
+# from data import Floorplans
+from data import TFRecordsDataset
 
 
 def average_gradients(tower_grads):
@@ -84,7 +85,7 @@ def print_progress(iterations, loss_dict):
         s += '{}: {:.4f}, '.format(k, v)
     sys.stdout.write('\rIteration {}: {}'.format(iterations, s[:-2])) #, end_time - start_time))
     # sys.stdout.write('\rEpoch {:03d}: {:05d}/{:05d}: {} ({:d}s)'.format(epoch, completed, total, s[:-2], int(end_time - start_time)))
-    sys.stdout.flush()    
+    sys.stdout.flush()
 
 
 def get_dataset(name):
@@ -92,7 +93,9 @@ def get_dataset(name):
         from tensorflow.examples.tutorials.mnist import input_data
         return input_data.read_data_sets("data/MNIST_data", one_hot=True)
     elif name == 'floorplans':
-        return Floorplans()
+        return TFRecordsDataset([os.path.join('data', 'floorplans.64.train.tfrecords')],
+                                    {'image_raw': tf.FixedLenFeature([], tf.string)},
+                                    [64, 64, 3])
 
 
 def prep_workspace(dirname):
