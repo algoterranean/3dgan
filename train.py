@@ -1,13 +1,11 @@
-# stdlib/external
 import os
-os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
-
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'     # only log errors
 import tensorflow as tf
+tf.logging.set_verbosity(tf.logging.ERROR)   # only log errors
 import numpy as np
 import sys
 import random
 import argparse
-# import os
 import uuid
 import pickle 
 import h5py
@@ -15,8 +13,7 @@ import cv2
 import time
 from sys import stdout
 from os import path
-# local
-# from models.fc import SimpleFC
+
 from models.fc import SimpleFC
 from models.cnn import SimpleCNN
 from models.chen import ChenCNN
@@ -24,82 +21,91 @@ from models.vae import VAE
 from models.gan import GAN
 from models.vaegan import VAEGAN
 from msssim import MultiScaleSSIM, tf_ssim, tf_ms_ssim
-# from data import Floorplans
 from util import *
 
 
 
-# def init_input(sess, args): #dataset, grayscale=False):
-#     with sess.as_default():
-#         # input tensor for dataset.
-#         # x_input is the tensor for our actual data
-#         # x is the tensor to be passed to the model (that is, after processing of actual data)
-#         # TODO: move this to Dataset class or something. dataset should be self-describing
-#         with tf.variable_scope('inputs'):
-#             if args.dataset == 'mnist':
-#                 x_input = tf.placeholder("float", [args.batch_size * args.n_gpus, 784], name='x_input')
-#                 x = tf.reshape(x_input, [-1, 28, 28, 1], name='x')                
-#                 # x_input = tf.placeholder("float", [None, 784], name='x_input')
-#             elif args.dataset == 'floorplans':
-#                 x_input = tf.placeholder("float", [args.batch_size * args.n_gpus, 64, 64, 3], name='x_input')
-#                 # x = tf.map_fn(lambda img: tf.image.per_image_standardization(img), x_input)
-#                 x = tf.identity(x_input, name='x')
-                
-#                 # x_input = tf.placeholder("float", [None, 64, 64, 3], name='x_input')
-#                 # x = tf.image.rgb_to_grayscale(x_input, name='x') if args.grayscale else tf.identity(x_input, name='x')
-#                 # tf.image.random_flip_left_right(img), images)
-#                 # x = tf.image.per_image_standardization(x_input)
-#         tf.add_to_collection('inputs', x)
-#         tf.add_to_collection('inputs', x_input)
-#     return x, x_input
-
-
-
-
 if __name__ == '__main__':
+    
     # command line arguments
-    parser = argparse.ArgumentParser()
-    parser.add_argument('--epochs',      type=int, default=3)
-    parser.add_argument('--batch_size',  type=int, default=256)
-    parser.add_argument('--examples',    type=int, default=10)
-    parser.add_argument('--lr',          type=float, default=0.001)
-    parser.add_argument('--layers',      type=int, nargs='+', default=(256, 128, 64))
-    parser.add_argument('--seed',        type=int, default=os.urandom(4))
-    parser.add_argument('--dataset',     type=lambda s: s.lower(), default='floorplans')
-    parser.add_argument('--shuffle',     default=False, action='store_true')
-    parser.add_argument('--dir',         type=str, default='workspace/{}'.format(uuid.uuid4()))
-    parser.add_argument('--resume',      default=False, action='store_true')
-    parser.add_argument('--model',       type=lambda s: s.lower(), default='fc')
-    parser.add_argument('--grayscale',   default=False, action='store_true')
-    parser.add_argument('--loss',        type=lambda s: s.lower(), default='l1')
-    parser.add_argument('--optimizer',   type=lambda s: s.lower(), default='rmsprop')
-    parser.add_argument('--momentum',    type=float, default=0.01)
-    parser.add_argument('--decay',       type=float, default=0.9)
-    parser.add_argument('--centered',    default=False, action='store_true')
-    parser.add_argument('--n_gpus',      type=int, default=1)
-    parser.add_argument('--latent_size', type=int, default=200)
-    parser.add_argument('--debug_graph', default=False, action='store_true')
+    ######################################################################
+    parser = argparse.ArgumentParser(description='Autoencoder training harness.',
+                                         epilog="""Example:
+                                                   python train.py --model gan 
+                                                                   --data floorplans
+                                                                   --dir workspace/gan/run1
+                                                                   --epochs 100
+                                                                   --batch_size 192
+                                                                   --n_gpus 2""")
+    parser._action_groups.pop()
+    model_args = parser.add_argument_group('Model')
+    data_args = parser.add_argument_group('Data')
+    optimizer_args = parser.add_argument_group('Optimizer')    
+    train_args = parser.add_argument_group('Training')
+    misc_args = parser.add_argument_group('Miscellaneous')
+    # misc settings
+    misc_args.add_argument('--seed', type=int, default=os.urandom(4),
+                               help='Useful for debugging. Default: output of os.urandom(4).')
+    misc_args.add_argument('--n_gpus', type=int, default=1,
+                               help="""Number of GPUs to use for simultaneous training. 
+                                       Model will be duplicated on each device and results 
+                                       averaged on CPU. Default: 1""")
+    misc_args.add_argument('--profile',     default=False, action='store_true',
+                               help="""Enables runtime metadata collection during training 
+                                       that is viewable in TensorBoard. Default: False.""")
+    # training settings
+    train_args.add_argument('--epochs', type=int, default=3,
+                                help="""Number of epochs to train for during this run. 
+                                        Default: 3.""")
+    train_args.add_argument('--batch_size', type=int, default=256,
+                                help='Batch size _per GPU_. Default: 256.')
+    train_args.add_argument('--examples', type=int, default=10,
+                                help="""Number of examples to generate when sampling from 
+                                        generative models (if supported). Default: 10.""")
+    train_args.add_argument('--dir', type=str, default='workspace/{}'.format(uuid.uuid4()),
+                                help="""Location to store checkpoints, logs, etc. If this 
+                                        location is populated by a previous run then training 
+                                        will be continued from last checkpoint.""")
+    # optimizer settings
+    optimizer_args.add_argument('--optimizer', type=lambda s: s.lower(), default='rmsprop',
+                                    help='Optimizer to use during training. Default: rmsprop.')
+    optimizer_args.add_argument('--lr', type=float, default=0.001,
+                                    help="""Learning rate of optimizer (if supported). 
+                                            Default: 0.001.""")
+    optimizer_args.add_argument('--loss', type=lambda s: s.lower(), default='l1',
+                                    help="""Loss function used by model during training 
+                                            (if supported). Default: l1.""")
+    optimizer_args.add_argument('--momentum', type=float, default=0.01,
+                                    help="""Momentum value used by optimizer (if supported). 
+                                            Default: 0.01.""")
+    optimizer_args.add_argument('--decay', type=float, default=0.9,
+                                    help="""Decay value used by optimizer (if supported). 
+                                            Default: 0.9.""")
+    optimizer_args.add_argument('--centered',    default=False, action='store_true',
+                                    help="""Enables centering in RMSProp optimizer. 
+                                            Default: False.""")
+    # model settings
+    model_args.add_argument('--model', type=lambda s: s.lower(), default='fc',
+                                help='Name of model to train. Default: fc.')
+    model_args.add_argument('--layers', type=int, nargs='+', default=(256, 128, 64),
+                                help="""Ordered list of layer sizes to use for sequential 
+                                        models that stack layers (if supported). 
+                                        Default: 256 128 64.""")
+    model_args.add_argument('--latent_size', type=int, default=200,
+                                help="""Size of middle 'z' (or latent) vector to use in 
+                                        autoencoder models (if supported). Default: 200.""")
+    # data settings
+    data_args.add_argument('--dataset', type=lambda s: s.lower(), default='floorplans',
+                               help='Name of dataset to use. Default: floorplans.')
+    
     args = parser.parse_args()
 
-    # TODO: how to integrate this into the Supervisor? 
-    # store these values in the graph?
     
-    if args.resume:
-        # copy passed-in values
-        args_copy = argparse.Namespace(**vars(args))
-        # load previous args
-        args = pickle.load(open(path.join(args.dir, 'settings'), 'rb'))
-        # adjust for new passed in values
-        args.resume = True
-        args.epochs = args_copy.epochs
-        print('Args restored')
-    
-
+    # set up model, data, and training environment
     ######################################################################
-
-    # init session
+    # set seed (useful for debugging purposes)
     random.seed(args.seed)
-
+    
     # init globals
     with tf.device('/cpu:0'):
         global_step = tf.Variable(0, name='global_step', trainable=False)
@@ -109,33 +115,21 @@ if __name__ == '__main__':
                 v = getattr(args, a)
                 tf.Variable(v, name=a, trainable=False)
 
-        
-
     # setup input pipeline
     d = get_dataset(args.dataset)
     x = d.batch_tensor(args.batch_size * args.n_gpus, args.epochs)
-    # x = inputs(args.batch_size * args.n_gpus, args.epochs)
 
     # setup model
     debug('Initializing model...')
     if args.model == 'gan':
         model = GAN(x, global_step, args)
-        
+    elif args.model == 'vae':
+        model = VAE(x, global_step, args)
     train_op = model.train_op
     losses = collection_to_dict(tf.get_collection('losses'))
-    
-    # # losses = collection_to_dict(tf.get_collection('losses', scope='model'))    
-    # batch_summaries = tf.summary.merge_all() #key='batch')
-    # epoch_summaries = tf.summary.merge_all(key='epoch')
-    # summaries = tf.summary.merge(tf.get_collection(tf.GraphKeys.SUMMARIES, scope='model'))
+    init_op = tf.group(tf.global_variables_initializer(), tf.local_variables_initializer())    
 
-    saver = tf.train.Saver(max_to_keep=None)
-    init_op = tf.group(tf.global_variables_initializer(), tf.local_variables_initializer())
-
-    def print_loss(sess):
-        l, step = sess.run([losses, global_step])
-        print_progress(step, l)
-        
+    # supervisor
     debug('Initializing supervisor...')
     supervisor = tf.train.Supervisor(logdir=os.path.join(args.dir, 'logs'),
                                          init_op=init_op,
@@ -143,17 +137,23 @@ if __name__ == '__main__':
                                          global_step=global_step,
                                          save_summaries_secs=30,
                                          save_model_secs=300)
+
+    # profiling (optional)
+    # requires adding libcupti.so.8.0 to LD_LIBRARY_PATH.
+    # location is /cuda_dir/extras/CUPTI/lib64
+    run_options = tf.RunOptions(trace_level=tf.RunOptions.FULL_TRACE) if args.profile else None
+    run_metadata = tf.RunMetadata() if args.profile else None
+
     
-    with supervisor.managed_session(config=tf.ConfigProto(allow_soft_placement=True)) as sess:
-        supervisor.loop(30, print_loss, (sess, ))
+    # training
+    ######################################################################
+    session_config = tf.ConfigProto(allow_soft_placement=True)
+    with supervisor.managed_session(config=session_config) as sess:
+        supervisor.loop(30, status_tracker(losses, global_step), (sess, ))
         start_time = time.time()
         debug('Starting training...')
         while not supervisor.should_stop():
-            sess.run(train_op)
-            
-
-    print('')
-    debug('Training complete! Elapsed time: {}s'.format(int(time.time() - start_time)))
+            sess.run(train_op, options=run_options, run_metadata=run_metadata)
+    debug('\nTraining complete! Elapsed time: {}s'.format(int(time.time() - start_time)))
     
     
-            

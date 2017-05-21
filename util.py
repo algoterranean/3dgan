@@ -78,15 +78,23 @@ def collection_to_dict(collection):
 #     sys.stdout.write('\rEpoch {:03d}: {:05d}/{:05d}: {} ({:d}s)'.format(epoch, completed, total, s[:-2], int(end_time - start_time)))
 #     sys.stdout.flush()
 
-def print_progress(iterations, loss_dict):
+def print_progress(iterations, loss_dict, start_time):
     end_time = time.time()
     s = ""
     for k, v in loss_dict.items():
         s += '{}: {:.4f}, '.format(k, v)
-    sys.stdout.write('\rIteration {}: {}'.format(iterations, s[:-2])) #, end_time - start_time))
+    sys.stdout.write('\r\tIteration {}: {} ({} sec)'.format(iterations, s[:-2], int(end_time - start_time)))
     # sys.stdout.write('\rEpoch {:03d}: {:05d}/{:05d}: {} ({:d}s)'.format(epoch, completed, total, s[:-2], int(end_time - start_time)))
     sys.stdout.flush()
 
+
+def status_tracker(losses, global_step):
+    start_time = time.time()
+    def helper(sess):
+        l, step = sess.run([losses, global_step])
+        print_progress(step, l, start_time)
+    return helper
+    
 
 def get_dataset(name):
     if name == 'mnist':
