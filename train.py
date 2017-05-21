@@ -1,10 +1,13 @@
 # stdlib/external
+import os
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
+
 import tensorflow as tf
 import numpy as np
 import sys
 import random
 import argparse
-import os
+# import os
 import uuid
 import pickle 
 import h5py
@@ -26,41 +29,42 @@ from util import *
 
 
 
-def init_input(sess, args): #dataset, grayscale=False):
-    with sess.as_default():
-        # input tensor for dataset.
-        # x_input is the tensor for our actual data
-        # x is the tensor to be passed to the model (that is, after processing of actual data)
-        # TODO: move this to Dataset class or something. dataset should be self-describing
-        with tf.variable_scope('inputs'):
-            if args.dataset == 'mnist':
-                x_input = tf.placeholder("float", [args.batch_size * args.n_gpus, 784], name='x_input')
-                x = tf.reshape(x_input, [-1, 28, 28, 1], name='x')                
-                # x_input = tf.placeholder("float", [None, 784], name='x_input')
-            elif args.dataset == 'floorplans':
-                x_input = tf.placeholder("float", [args.batch_size * args.n_gpus, 64, 64, 3], name='x_input')
-                # x = tf.map_fn(lambda img: tf.image.per_image_standardization(img), x_input)
-                x = tf.identity(x_input, name='x')
+# def init_input(sess, args): #dataset, grayscale=False):
+#     with sess.as_default():
+#         # input tensor for dataset.
+#         # x_input is the tensor for our actual data
+#         # x is the tensor to be passed to the model (that is, after processing of actual data)
+#         # TODO: move this to Dataset class or something. dataset should be self-describing
+#         with tf.variable_scope('inputs'):
+#             if args.dataset == 'mnist':
+#                 x_input = tf.placeholder("float", [args.batch_size * args.n_gpus, 784], name='x_input')
+#                 x = tf.reshape(x_input, [-1, 28, 28, 1], name='x')                
+#                 # x_input = tf.placeholder("float", [None, 784], name='x_input')
+#             elif args.dataset == 'floorplans':
+#                 x_input = tf.placeholder("float", [args.batch_size * args.n_gpus, 64, 64, 3], name='x_input')
+#                 # x = tf.map_fn(lambda img: tf.image.per_image_standardization(img), x_input)
+#                 x = tf.identity(x_input, name='x')
                 
-                # x_input = tf.placeholder("float", [None, 64, 64, 3], name='x_input')
-                # x = tf.image.rgb_to_grayscale(x_input, name='x') if args.grayscale else tf.identity(x_input, name='x')
-                # tf.image.random_flip_left_right(img), images)
-                # x = tf.image.per_image_standardization(x_input)
-        tf.add_to_collection('inputs', x)
-        tf.add_to_collection('inputs', x_input)
-    return x, x_input
+#                 # x_input = tf.placeholder("float", [None, 64, 64, 3], name='x_input')
+#                 # x = tf.image.rgb_to_grayscale(x_input, name='x') if args.grayscale else tf.identity(x_input, name='x')
+#                 # tf.image.random_flip_left_right(img), images)
+#                 # x = tf.image.per_image_standardization(x_input)
+#         tf.add_to_collection('inputs', x)
+#         tf.add_to_collection('inputs', x_input)
+#     return x, x_input
 
 
 
 def read_and_decode(filename_queue):
-    features_def = {'height': tf.FixedLenFeature([], tf.int64),
+    feature_def = {'height': tf.FixedLenFeature([], tf.int64),
                     'width': tf.FixedLenFeature([], tf.int64),
                     'image_raw': tf.FixedLenFeature([], tf.string)}
     reader = tf.TFRecordReader()
     _, serialized_example = reader.read(filename_queue)
     features = tf.parse_single_example(serialized_example, features=feature_def)
     image = tf.decode_raw(features['image_raw'], tf.uint8)
-    image.set_shape([64, 64, 3])
+    image.set_shape([64*64*3])
+    image = tf.reshape(image, [64, 64, 3])
     image = tf.cast(image, tf.float32) * (1.0 / 255.0)  # - 0.5
     return image
 
@@ -70,7 +74,7 @@ def inputs(batch_size, num_epochs):
     with tf.name_scope('input_queue'):
         filename_queue = tf.train.string_input_producer([filename], num_epochs=num_epochs)
         image = read_and_decode(filename_queue)
-        images = tf.train.shuffle_batch([image], batch_size=batch_size, num_threads=4, capacity=1000+3*batch_size, min_after_queue=1000)
+        images = tf.train.shuffle_batch([image], batch_size=batch_size, num_threads=4, capacity=1000+3*batch_size, min_after_dequeue=1000)
     return images
 
 
@@ -88,7 +92,7 @@ if __name__ == '__main__':
     parser.add_argument('--lr',          type=float, default=0.001)
     parser.add_argument('--layers',      type=int, nargs='+', default=(256, 128, 64))
     parser.add_argument('--seed',        type=int, default=os.urandom(4))
-    parser.add_argument('--dataset',     type=lambda s: s.lower(), default='mnist')
+    parser.add_argument('--dataset',     type=lambda s: s.lower(), default='floorplans')
     parser.add_argument('--shuffle',     default=False, action='store_true')
     parser.add_argument('--dir',         type=str, default='workspace/{}'.format(uuid.uuid4()))
     parser.add_argument('--resume',      default=False, action='store_true')
@@ -104,7 +108,9 @@ if __name__ == '__main__':
     parser.add_argument('--debug_graph', default=False, action='store_true')
     args = parser.parse_args()
 
-    # TODO: should keep the args that were passed in this time, but not all of them?
+    # TODO: how to integrate this into the Supervisor? 
+    # store these values in the graph?
+    
     if args.resume:
         # copy passed-in values
         args_copy = argparse.Namespace(**vars(args))
@@ -118,145 +124,59 @@ if __name__ == '__main__':
 
     ######################################################################
 
-    # setup workspace
-    log_files = prep_workspace(args.dir)        
-    
     # init session
     random.seed(args.seed)
-    sess = tf.Session(config=tf.ConfigProto(allow_soft_placement=True)) #, log_device_placement=True))
 
     # init globals
     with tf.device('/cpu:0'):
-        with tf.variable_scope('global_vars'):
-            global_step = tf.Variable(0, name='global_step', trainable=False)
-            global_epoch = tf.Variable(0, name='global_epoch', trainable=False)
-            global_batch_size = tf.Variable(args.batch_size, name='global_batch_size', trainable=False)
+        global_step = tf.Variable(0, name='global_step', trainable=False)
+        # save the arguments to the graph
+        with tf.variable_scope('args'):
+            for a in vars(args):
+                v = getattr(args, a)
+                tf.Variable(v, name=a, trainable=False)
 
-    # setup input nodes (including any image filters)
-    x = inputs(args.batch_size, args.epochs)
-    # x, x_input = init_input(sess, args)
+    # setup input pipeline
+    x = inputs(args.batch_size * args.n_gpus, args.epochs)
 
     # setup model
-    
-    # with tf.variable_scope('model'):
+    debug('Initializing model...')
     if args.model == 'gan':
         model = GAN(x, global_step, args)
+        
     train_op = model.train_op
     losses = collection_to_dict(tf.get_collection('losses'))
-    # losses = collection_to_dict(tf.get_collection('losses', scope='model'))    
-    batch_summaries = tf.summary.merge_all() #key='batch')
-    epoch_summaries = tf.summary.merge_all(key='epoch')
+    
+    # # losses = collection_to_dict(tf.get_collection('losses', scope='model'))    
+    # batch_summaries = tf.summary.merge_all() #key='batch')
+    # epoch_summaries = tf.summary.merge_all(key='epoch')
     # summaries = tf.summary.merge(tf.get_collection(tf.GraphKeys.SUMMARIES, scope='model'))
 
-    # setup tensorboard
-    tb_writer = tf.summary.FileWriter(path.join(args.dir, 'logs'), graph=tf.get_default_graph())
-
-    # session saving/loading
     saver = tf.train.Saver(max_to_keep=None)
-    sess.run(tf.global_variables_initializer())
-    if args.resume:
-        saver.restore(sess, tf.train.latest_checkpoint(path.join(args.dir, 'checkpoints')))
-        print('Model restored. Currently at step {} and epoch {} with batch size {}'.format(sess.run(global_step), sess.run(global_epoch), sess.run(global_batch_size)))
-    else:
-        save_settings(sess, args)
+    init_op = tf.group(tf.global_variables_initializer(), tf.local_variables_initializer())
 
-    # print out schematic/visualization of model
-    total_params = visualize_parameters()
-    print('Total params: {}'.format(total_params))
-
-    
-    if args.debug_graph:
-        sys.exit()
-
-    # dataset
-    debug('Loading dataset...')
-    data = get_dataset(args.dataset)
-    # example data for visualizing results/progress
-    sample_indexes = np.random.choice(data.test.images.shape[0], args.batch_size, replace=False)
-    example_images = data.test.images[sample_indexes, :]
-
-    
-    ######################################################################
-    # training!
-    
-    debug('Starting training')
-    start_epoch = sess.run(global_epoch) + 1
-    n_trbatches = int(data.train.num_examples/(args.batch_size*args.n_gpus))
-    # n_valbatches = int(data.validation.num_examples/args.batch_size)
-    # n_testbatches = int(data.test.num_examples/args.batch_size)
-    iterations_completed = sess.run(global_step) * args.batch_size
-
-    # TODO add to args
-    summary_freq = int(n_trbatches / 20)
-
-    # for each epoch...
-    for epoch in range(start_epoch, args.epochs+start_epoch):
-        epoch_start_time = time.time()
-        if args.shuffle:
-            data.train.shuffle()
-
-        # perform training
-        for i in range(n_trbatches):
-            xs, ys = data.train.next_batch(args.batch_size * args.n_gpus)
-            # xs = []
-            # for g in range(args.n_gpus):
-            #     x_batch, y_batch = data.train.next_batch(args.batch_size)    
-            #     xs.append(x_batch)
-            
-            _, l = sess.run([train_op, losses]) #, {x_input: xs})
-            print_progress(epoch, args.n_gpus*args.batch_size*(i+1), data.train.num_examples, epoch_start_time, l)
-
-
-
-            # batch_summaries
-            if i % summary_freq == 0:
-                results = sess.run(model.summary_op) #, {x_input: xs})
-                # results = sess.run(batch_summaries, {x_input: xs})
-                tb_writer.add_summary(results, args.batch_size*(i+1) + (epoch-1)*n_trbatches*args.batch_size)
-                
-                # results = sess.run(tf.concat(tf.unstack(model.g, num=args.batch_size, axis=0)[0:10], axis=0), {x_input: xs})
-                # print('got results')
-                # print(results.shape)
-
-                # print(results)
-                # print(len(results))
-
-
-
-
-
-
-
-        # # epoch summaries
-        # results = sess.run(epoch_summaries, {x_input: xs})
-        # tb_writer.add_summary(results, args.batch_size*(i+1) + (epoch-1)*n_trbatches*args.batch_size)
-        # # print('\n')
-
-            
-        # # perform validation
-        # results = fold(sess, x_input, losses, data.validation, args.batchsize, n_valbatches)
-        # # log_files['validate_loss'].write('{:05d},{:.5f}\n'.format(iterations_completed, results[0]))
-        # stdout.write(', validation: {:.4f}\r\n'.format(results[0]))
-
-            
-        # snapshot
-        stdout.write('\n\tWriting snapshot to disk...')
-        chkfile = path.join(args.dir, 'checkpoints', 'epoch_{:03d}.ckpt'.format(epoch))
-        saver.save(sess, chkfile, global_step=global_step)
-        stdout.write('complete!\r\n')
-        stdout.flush()
-
-        # keep track of current epoch in global vars
-        sess.run(global_epoch.assign(epoch+1))
-
+    def print_loss(sess):
+        l, step = sess.run([losses, global_step])
+        print_progress(step, l)
         
-    # # training completed, perform test
-    # debug('Training completed')
-    # debug('Starting testing')
-    # results = fold(sess, x_input, [loss], data.test, args.batchsize, n_testbatches)
-    # # # log and print progress
-    # # log_files['test_loss'].write('{:05d},{:.5f}\n'.format(iterations_completed, results[0]))
-    # stdout.write('Test loss: {:.4f}\r\n'.format(results[0]))
-    # stdout.flush()
+    debug('Initializing supervisor...')
+    supervisor = tf.train.Supervisor(logdir=os.path.join(args.dir, 'logs'),
+                                         init_op=init_op,
+                                         summary_op=model.summary_op,
+                                         global_step=global_step,
+                                         save_summaries_secs=30,
+                                         save_model_secs=300)
+    
+    with supervisor.managed_session(config=tf.ConfigProto(allow_soft_placement=True)) as sess:
+        supervisor.loop(30, print_loss, (sess, ))
+        start_time = time.time()
+        debug('Starting training...')
+        while not supervisor.should_stop():
+            sess.run(train_op)
+            
 
-
+    print('')
+    debug('Training complete! Elapsed time: {}s'.format(int(time.time() - start_time)))
+    
+    
+            

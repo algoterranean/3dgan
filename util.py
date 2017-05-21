@@ -68,13 +68,23 @@ def collection_to_dict(collection):
 
 # def print_progress(epoch, completed, total, loss, gl, ll, start_time):
 
-def print_progress(epoch, completed, total, start_time, loss_dict):
+
+# def print_progress(epoch, completed, total, start_time, loss_dict):
+#     end_time = time.time()
+#     s = ""
+#     for k, v in loss_dict.items():
+#         s += '{}: {:.4f}, '.format(k, v)
+#     sys.stdout.write('\rEpoch {:03d}: {:05d}/{:05d}: {} ({:d}s)'.format(epoch, completed, total, s[:-2], int(end_time - start_time)))
+#     sys.stdout.flush()
+
+def print_progress(iterations, loss_dict):
     end_time = time.time()
     s = ""
     for k, v in loss_dict.items():
         s += '{}: {:.4f}, '.format(k, v)
-    sys.stdout.write('\rEpoch {:03d}: {:05d}/{:05d}: {} ({:d}s)'.format(epoch, completed, total, s[:-2], int(end_time - start_time)))
-    sys.stdout.flush()
+    sys.stdout.write('\rIteration {}: {}'.format(iterations, s[:-2])) #, end_time - start_time))
+    # sys.stdout.write('\rEpoch {:03d}: {:05d}/{:05d}: {} ({:d}s)'.format(epoch, completed, total, s[:-2], int(end_time - start_time)))
+    sys.stdout.flush()    
 
 
 def get_dataset(name):
@@ -96,9 +106,9 @@ def prep_workspace(dirname):
         if not os.path.exists(d):
             os.mkdir(d)
             
-    return {'train_loss': open(os.path.join(dirname, "logs", "train_loss.csv"), 'a'),
-            'validate_loss': open(os.path.join(dirname, "logs", "validate_loss.csv"), 'a'),
-            'test_loss' : open(os.path.join(dirname, "logs", "test_loss.csv"), 'a')}
+    # return {'train_loss': open(os.path.join(dirname, "logs", "train_loss.csv"), 'a'),
+    #         'validate_loss': open(os.path.join(dirname, "logs", "validate_loss.csv"), 'a'),
+    #         'test_loss' : open(os.path.join(dirname, "logs", "test_loss.csv"), 'a')}
 
 
 def visualize_parameters():

@@ -9,7 +9,8 @@ from .ops import dense, conv2d, deconv2d, lrelu, flatten, M
 from util import print_progress, fold, average_gradients, init_optimizer
 
 from tensorflow import variable_scope as var_scope, name_scope as name_scope
-from tensorflow.nn import relu
+# from tensorflow.nn import relu
+relu = tf.nn.relu
 
 # batch norm info:
 # https://github.com/tensorflow/tensorflow/issues/4361
@@ -46,6 +47,9 @@ class GAN(Model):
                             # generator summaries
                             with var_scope('generator_summaries'):
                                 s = tf.expand_dims(tf.concat(tf.unstack(g, num=args.batch_size, axis=0)[0:10], axis=1), axis=0)
+                                # self.fake_image_name = tf.placeholder(tf.string, [])
+                                # tf.summary.image("fake_" + tf.cast(global_step, tf.string), s)
+                                # tf.string_join(['fake_images_', tf.cast(global_step, tf.string)])
                                 tf.summary.image('fake_images', s)
                                 
                             # get losses and add summaries
@@ -132,6 +136,7 @@ class GAN(Model):
             # split batch between GPUs
             with var_scope('sliced_input'):
                 sliced_input = x[gpu_id * args.batch_size:(gpu_id+1)*args.batch_size,:]
+            # d_real = self.build_discriminator(x, (gpu_id>0))
             d_real = self.build_discriminator(sliced_input, (gpu_id>0))
             d_fake = self.build_discriminator(g, True)
             
