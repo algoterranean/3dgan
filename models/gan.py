@@ -24,7 +24,9 @@ class GAN(Model):
     We only keep one set of batch norm updates and include it as part of the train op.
     """
     
-    def __init__(self, x, args):
+    def __init__(self, x, args, wgan=False):
+        self.wgan = wgan
+        
         with tf.device('/cpu:0'):
             # store optimizer and average grads on CPU
             g_opt = init_optimizer(args)
@@ -81,14 +83,25 @@ class GAN(Model):
                         
                 # apply the gradients
                 with var_scope('apply_gradients/generator'):
-                    g_apply_gradient_op = g_opt.apply_gradients(g_grads, global_step=tf.train.get_global_step)
+                    g_apply_gradient_op = g_opt.apply_gradients(g_grads, global_step=tf.train.get_global_step())
                 with var_scope('apply_gradients/discriminator'):
-                    d_apply_gradient_op = d_opt.apply_gradients(d_grads, global_step=tf.train.get_global_step)
-                        
+                    d_apply_gradient_op = d_opt.apply_gradients(d_grads, global_step=tf.train.get_global_step())
+
+                # clip weights after each optimizer update
+                with var_scope('clip_weights/discriminator'):
+                    clip_D = [p.assign(tf.clip_by_value(p, -0.01, 0.01)) for p in d_vars]
+                
                 # group training ops together
                 with var_scope('train_op'):
                     batchnorm_updates_op = tf.group(*batchnorm_updates)
-                    self.train_op = tf.group(g_apply_gradient_op, d_apply_gradient_op, batchnorm_updates_op)
+                    # d_step = [d_apply_gradient_op, batchnorm_updates_op] + clip_D
+                    # if self.wgan:
+                    #     d_step *= 5
+                    # self.train_op = tf.group(d_step + [g_apply_gradient_op])
+                    if self.wgan:
+                        self.train_op = tf.group(d_apply_gradient_op, batchnorm_updates_op, *clip_D, g_apply_gradient_op)
+                    else:
+                        self.train_op = tf.group(d_apply_gradient_op, batchnorm_updates_op, g_apply_gradient_op)
 
             # add summaries for the gradients
             for grad, var in g_grads + d_grads:
@@ -118,13 +131,19 @@ class GAN(Model):
                 sliced_input = x[gpu_id * args.batch_size:(gpu_id+1)*args.batch_size,:]
             d_real = self.build_discriminator(sliced_input, (gpu_id>0))
             d_fake = self.build_discriminator(g, True)
-            
+
         # losses
-        # need to maximize this, but TF only does minimization, so we use negative        
-        with var_scope('losses/generator'):
-            g_loss = tf.reduce_mean(-tf.log(d_fake + 1e-8), name='g_loss')
-        with var_scope('losses/discriminator'):
-            d_loss = tf.reduce_mean(-tf.log(d_real + 1e-8) - tf.log(1 - d_fake + 1e-8), name='d_loss')
+        if self.wgan:
+            with var_scope('losses/generator'):
+                g_loss = tf.negative(tf.reduce_sum(d_fake), name='g_loss')
+            with var_scope('losses/discriminator'):
+                d_loss = tf.identity(tf.reduce_mean(d_real) - tf.reduce_mean(d_fake), name='d_loss')
+        else:
+            # need to maximize this, but TF only does minimization, so we use negative        
+            with var_scope('losses/generator'):
+                g_loss = tf.reduce_mean(-tf.log(d_fake + 1e-8), name='g_loss')
+            with var_scope('losses/discriminator'):
+                d_loss = tf.reduce_mean(-tf.log(d_real + 1e-8) - tf.log(1 - d_fake + 1e-8), name='d_loss')
         tf.add_to_collection('losses', g_loss)
         tf.add_to_collection('losses', d_loss)
         
@@ -213,7 +232,10 @@ class GAN(Model):
             
         with var_scope('logits'):
             logits = flatten(x, name='flat1')
-            out = tf.nn.sigmoid(logits, name='sig1')
+            if self.wgan:
+                out = tf.identity(logits, name='out')
+            else:
+                out = tf.nn.sigmoid(logits, name='out')
             self.activation_summary(out)
             
         # sample node (for use in visualize.py)

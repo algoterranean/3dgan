@@ -125,6 +125,8 @@ if __name__ == '__main__':
     debug('Initializing model...')
     if args.model == 'gan':
         model = GAN(x, args)
+    elif args.model == 'wgan':
+        model = GAN(x, args, wgan=True)
     elif args.model == 'vae':
         model = VAE(x, args)
     train_op = model.train_op
