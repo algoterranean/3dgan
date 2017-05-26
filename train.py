@@ -97,7 +97,9 @@ if __name__ == '__main__':
     # data settings
     data_args.add_argument('--dataset', type=lambda s: s.lower(), default='floorplans',
                                help='Name of dataset to use. Default: floorplans.')
-    
+    # data_args.add_argument('--normalize', default=False, action='store_true',
+    #                            help="""Enables normalization of dataset images to [-0.5, 0.5].
+    #                                    Default: False.""")
     args = parser.parse_args()
 
     
@@ -122,20 +124,20 @@ if __name__ == '__main__':
     # setup model
     debug('Initializing model...')
     if args.model == 'gan':
-        model = GAN(x, global_step, args)
+        model = GAN(x, args)
     elif args.model == 'vae':
-        model = VAE(x, global_step, args)
+        model = VAE(x, args)
     train_op = model.train_op
     losses = collection_to_dict(tf.get_collection('losses'))
     init_op = tf.group(tf.global_variables_initializer(), tf.local_variables_initializer())    
 
     # supervisor
     debug('Initializing supervisor...')
-    supervisor = tf.train.Supervisor(logdir=os.path.join(args.dir, 'logs'),
+    supervisor = tf.train.Supervisor(logdir=args.dir, #os.path.join(args.dir, 'logs'),
                                          init_op=init_op,
-                                         summary_op=model.summary_op,
+                                         summary_op=None, #model.summary_op,
                                          global_step=global_step,
-                                         save_summaries_secs=30,
+                                         save_summaries_secs=0,
                                          save_model_secs=300)
 
     # profiling (optional)
@@ -144,16 +146,31 @@ if __name__ == '__main__':
     run_options = tf.RunOptions(trace_level=tf.RunOptions.FULL_TRACE) if args.profile else None
     run_metadata = tf.RunMetadata() if args.profile else None
 
+    print('input size:', x.shape)
+
     
     # training
     ######################################################################
     session_config = tf.ConfigProto(allow_soft_placement=True)
     with supervisor.managed_session(config=session_config) as sess:
-        supervisor.loop(30, status_tracker(losses, global_step), (sess, ))
+        # h = status_tracker(losses, global_step)
         start_time = time.time()
         debug('Starting training...')
+        the_step = 0
+
+
         while not supervisor.should_stop():
-            sess.run(train_op, options=run_options, run_metadata=run_metadata)
+            if the_step % 100 == 0:
+                _, summary_results, loss_results, gs = sess.run([train_op, model.summary_op, losses, global_step],
+                                                                    options=run_options, run_metadata=run_metadata)
+                print_progress(gs, loss_results, start_time)
+                supervisor.summary_computed(sess, summary_results)
+                
+            else:
+                sess.run(train_op, options=run_options, run_metadata=run_metadata)
+            the_step += 1
+                
+    print('Steps:', the_step)
     debug('\nTraining complete! Elapsed time: {}s'.format(int(time.time() - start_time)))
     
     

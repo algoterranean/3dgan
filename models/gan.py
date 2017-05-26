@@ -24,7 +24,7 @@ class GAN(Model):
     We only keep one set of batch norm updates and include it as part of the train op.
     """
     
-    def __init__(self, x, global_step, args):
+    def __init__(self, x, args):
         with tf.device('/cpu:0'):
             # store optimizer and average grads on CPU
             g_opt = init_optimizer(args)
@@ -37,8 +37,8 @@ class GAN(Model):
                 for gpu_id in range(args.n_gpus):
                     with tf.device(self.variables_on_cpu(gpu_id)):
                         with name_scope('tower_{}'.format(gpu_id)) as scope:
-                            # build model
-                            z, g, d_real, d_fake = self.construct_model(x, args, gpu_id)
+                            # build model  (note x is normalized to [-0.5, 0.5]
+                            z, g, d_real, d_fake = self.construct_model(x - 0.5, args, gpu_id)
 
                             # generator (sample) summary
                             with var_scope('generator_summaries'):
@@ -81,9 +81,9 @@ class GAN(Model):
                         
                 # apply the gradients
                 with var_scope('apply_gradients/generator'):
-                    g_apply_gradient_op = g_opt.apply_gradients(g_grads, global_step=global_step)
+                    g_apply_gradient_op = g_opt.apply_gradients(g_grads, global_step=tf.train.get_global_step)
                 with var_scope('apply_gradients/discriminator'):
-                    d_apply_gradient_op = d_opt.apply_gradients(d_grads, global_step=global_step)
+                    d_apply_gradient_op = d_opt.apply_gradients(d_grads, global_step=tf.train.get_global_step)
                         
                 # group training ops together
                 with var_scope('train_op'):
@@ -170,7 +170,7 @@ class GAN(Model):
             x = relu(batch_norm(deconv2d(x, 128, 64, 5, 2, reuse=reuse, name='dc3')))
             self.activation_summary(x)
             
-        with var_scope('deconv4', reuse=reuse):
+        with var_scope('deconv4', reuse=reuse): 
             x = relu(batch_norm(deconv2d(x, 64, 3, 5, 2, reuse=reuse, name='dc4')))
             self.activation_summary(x)
             
