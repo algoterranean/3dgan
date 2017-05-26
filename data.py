@@ -14,18 +14,18 @@ class TFRecordsDataset:
         self.feature_def = feature_def
         self.image_shape = image_shape
 
-    def batch_tensor(self, batch_size, num_epochs):
+    def batch_tensor(self, batch_size, num_epochs): #, normalize=False):
         with tf.name_scope('input_queue'):
             filename_queue = tf.train.string_input_producer(self.filenames, num_epochs=num_epochs)
-            image = self._read_and_decode(filename_queue)
+            image = self._read_and_decode(filename_queue) #, normalize)
             images = tf.train.shuffle_batch([image],
                                                 batch_size=batch_size,
                                                 num_threads=self.num_threads,
-                                                capacity=3*batch_size+1000,
+                                                capacity=1*batch_size+1000,
                                                 min_after_dequeue=1000)
         return images
 
-    def _read_and_decode(self, filename_queue):
+    def _read_and_decode(self, filename_queue): #, normalize=False):
         reader = tf.TFRecordReader()
         _, serialized_example = reader.read(filename_queue)
         features = tf.parse_single_example(serialized_example, features=self.feature_def)
@@ -38,7 +38,9 @@ class TFRecordsDataset:
 
         image.set_shape([c])
         image = tf.reshape(image, self.image_shape)
-        image = tf.cast(image, tf.float32) * (1.0 / 255.0) - 0.5
+        image = tf.cast(image, tf.float32) * (1.0 / 255.0) #- 0.5
+        # if normalize:
+        #     image = image - 0.5
         return image
 
 
