@@ -4,7 +4,7 @@ import time
 from sys import stdout
 from util import print_progress, fold
 from .model import Model
-from .ops import dense, conv2d, deconv2d, lrelu, flatten, L, M
+from .ops import dense, conv2d, deconv2d, lrelu, flatten
 from util import average_gradients, init_optimizer
 
 
@@ -24,7 +24,7 @@ class VAE(Model):
                     with tf.device(self.variables_on_cpu(gpu_id)):
                         with tf.name_scope('tower_{}'.format(gpu_id)) as scope:
                             # model
-                            encoder, z, z_mean, z_stddev, decoder_real, decoder_fake = self.construct_model(x, args, gpu_id)
+                            encoder, z, z_mean, z_stddev, decoder_real, decoder_fake = self.build_model(x, args, gpu_id)
                             
                             # loss
                             losses = tf.get_collection('losses', scope)
@@ -69,11 +69,9 @@ class VAE(Model):
                                 
 
             
-    def construct_model(self, x, args, gpu_id):
-        
+    def build_model(self, x, args, gpu_id):
         with tf.variable_scope('sliced_input'):
             sliced_input = x[gpu_id * args.batch_size:(gpu_id+1)*args.batch_size,:]
-
             s = tf.expand_dims(tf.concat(tf.unstack(sliced_input, num=args.batch_size, axis=0)[0:10], axis=1), axis=0)
             tf.summary.image('inputs', s)        
         
