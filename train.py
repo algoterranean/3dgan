@@ -14,12 +14,12 @@ import time
 from sys import stdout
 from os import path
 
-from models.fc import SimpleFC
-from models.cnn import SimpleCNN
-from models.chen import ChenCNN
+# from models.fc import SimpleFC
+from models.cnn import CNN
+# from models.chen import ChenCNN
 from models.vae import VAE
 from models.gan import GAN
-from models.vaegan import VAEGAN
+# from models.vaegan import VAEGAN
 from msssim import MultiScaleSSIM, tf_ssim, tf_ms_ssim
 from util import *
 
@@ -129,6 +129,8 @@ if __name__ == '__main__':
         model = GAN(x, args, wgan=True)
     elif args.model == 'vae':
         model = VAE(x, args)
+    elif args.model == 'cnn':
+        model = CNN(x, args)
     train_op = model.train_op
     losses = collection_to_dict(tf.get_collection('losses'))
     init_op = tf.group(tf.global_variables_initializer(), tf.local_variables_initializer())    
