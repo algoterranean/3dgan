@@ -1,8 +1,10 @@
+# global
 import tensorflow as tf
-from .layers import downconv_layer, upconv_layer
-from .model import Model
-from .ops import dense, conv2d, deconv2d, lrelu, flatten
+# local
 from util import average_gradients, init_optimizer
+from models.model import Model
+from models.ops import dense, conv2d, deconv2d, lrelu, flatten, input_slice, montage_summary
+
 
     
 # TODO: build decoder from same weights as encoder
@@ -13,45 +15,33 @@ class CNN(Model):
     def __init__(self, x, args):
         with tf.device('/cpu:0'):
             opt = init_optimizer(args)
-            summaries = []
             tower_grads = []
 
             with tf.variable_scope('model') as scope:
                 for gpu_id in range(args.n_gpus):
                     with tf.device(self.variables_on_cpu(gpu_id)):
                         with tf.name_scope('tower_{}'.format(gpu_id)) as scope:
-                            encoder, latent, decoder = self.build_model(x, args, gpu_id)
-
-                            losses = tf.get_collection('losses', scope)
-                            for l in losses:
-                                tf.summary.scalar(self.tensor_name(l), l)
-                            loss = losses[0]
-
+                            # input
+                            x_slice = input_slice(x, args.batch_size, gpu_id)
+                            # model
+                            encoder, latent, decoder = self.build_model(x_slice, args, gpu_id)
+                            # loss
+                            loss = self.summarize_collection('losses', scope)[0]
+                            # reuse variables on next tower
                             tf.get_variable_scope().reuse_variables()
-                            s = tf.expand_dims(tf.concat(tf.unstack(decoder, num=args.batch_size, axis=0)[0:10], axis=1), axis=0)
-                            tf.summary.image('examples', s)
-
-                            summaries = tf.get_collection(tf.GraphKeys.SUMMARIES, scope)
-                            vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope='model')
+                            # add montage summaries
+                            montage_summary(x_slice, args, 'inputs')
+                            montage_summary(decoder, args, 'outputs')
+                            # compute gradients on this GPU
                             with tf.variable_scope('compute_gradients'):
-                                grads = opt.compute_gradients(loss)
-                            tower_grads.append(grads)
-                            
+                                tower_grads.append(opt.compute_gradients(loss))
             # back on the CPU
             with tf.variable_scope('training'):
-                with tf.variable_scope('average_gradients'):
-                    grads = average_gradients(tower_grads)
-                with tf.variable_scope('apply_gradients'):
-                    apply_grad_op = opt.apply_gradients(grads, global_step=tf.train.get_global_step())
-                with tf.variable_scope('train_op'):
-                    self.train_op = tf.group(apply_grad_op)
-
-            for grad, var in grads:
-                if grad is not None:
-                    summaries.append(tf.summary.histogram(var.op.name + '/gradients', grad))
-
-            self.summary_op = tf.summary.merge(summaries)
-
+                avg_grads, apply_grads, self.train_op = self.average_and_apply_grads(tower_grads, opt)
+                self.summarize_grads(avg_grads)
+                
+            # combine summaries
+            self.summary_op = tf.summary.merge(tf.get_collection(tf.GraphKeys.SUMMARIES, scope))
 
 
     def build_encoder(self, x, reuse=False):
@@ -130,13 +120,8 @@ class CNN(Model):
     
 
     def build_model(self, x, args, gpu_id):
-        with tf.variable_scope('sliced_input'):
-            sliced_input = x[gpu_id * args.batch_size:(gpu_id+1)*args.batch_size,:]
-            s = tf.expand_dims(tf.concat(tf.unstack(sliced_input, num=args.batch_size, axis=0)[0:10], axis=1), axis=0)
-            tf.summary.image('inputs', s)
-
         with tf.variable_scope('encoder'):
-            encoder = self.build_encoder(sliced_input, (gpu_id > 0))
+            encoder = self.build_encoder(x, (gpu_id > 0))
 
         with tf.variable_scope('latent'):
             latent = self.build_latent(encoder, args.latent_size, (gpu_id > 0))
@@ -145,42 +130,7 @@ class CNN(Model):
             decoder = self.build_decoder(latent, args.latent_size, (gpu_id > 0))
         
         with tf.variable_scope('losses'):
-            loss = tf.reduce_mean(tf.abs(sliced_input - decoder), name='loss')
+            loss = tf.reduce_mean(tf.abs(x - decoder), name='loss')
         tf.add_to_collection('losses', loss)
 
         return (encoder, latent, decoder)
-
-            
-            
-
-
-# class SimpleCNN(Model):
-#     def __init__(self, optimizer, x, layer_sizes):
-#         Model.__init__(self)
-#         self.layer_sizes = layer_sizes
-#         orig_shape = x.get_shape().as_list()
-        
-#         self._encoder = self._build_encoder(x)
-#         self._decoder = self._build_decoder(self._encoder, orig_shape[3])
-#         self._loss = tf.reduce_mean(tf.abs(x - self._decoder))
-#         self._optimizer = optimizer        
-#         self._train_op = optimizer.minimize(self._loss)
-
-        
-
-#     def _build_encoder(self, x):
-#         with tf.variable_scope('encoder'):
-#             for out_size in self.layer_sizes:
-#                 x = downconv_layer(x, out_size, max_pool=2, name='Layer.Encoder.{}'.format(out_size))     ; L(x)
-#             tf.identity(x, name='sample')
-#         return x
-
-
-#     def _build_decoder(self, x, out_filters):
-#         with tf.variable_scope('decoder'):
-#             for out_size in self.layer_sizes[1::-1]:
-#                 x = upconv_layer(x, out_size, name='Layer.Decoder.{}'.format(out_size))                   ; L(x)
-#             x = upconv_layer(x, out_filters, name='Layer.Output')                                         ; L(x)
-#             tf.identity(x, name='sample')
-#         return x
-

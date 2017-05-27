@@ -14,12 +14,9 @@ import time
 from sys import stdout
 from os import path
 
-# from models.fc import SimpleFC
 from models.cnn import CNN
-# from models.chen import ChenCNN
 from models.vae import VAE
 from models.gan import GAN
-# from models.vaegan import VAEGAN
 from msssim import MultiScaleSSIM, tf_ssim, tf_ms_ssim
 from util import *
 
@@ -162,19 +159,15 @@ if __name__ == '__main__':
         debug('Starting training...')
         the_step = 0
 
-
         while not supervisor.should_stop():
             if the_step % 100 == 0:
                 _, summary_results, loss_results, gs = sess.run([train_op, model.summary_op, losses, global_step],
                                                                     options=run_options, run_metadata=run_metadata)
                 print_progress(gs, loss_results, start_time)
                 supervisor.summary_computed(sess, summary_results)
-                
             else:
                 sess.run(train_op, options=run_options, run_metadata=run_metadata)
             the_step += 1
                 
     print('Steps:', the_step)
     debug('\nTraining complete! Elapsed time: {}s'.format(int(time.time() - start_time)))
-    
-    

@@ -1,11 +1,13 @@
+# global
 import tensorflow as tf
 from tensorflow.contrib.layers import batch_norm
 import numpy as np
 import time
 from sys import stdout
-from .model import Model
-from .ops import dense, conv2d, deconv2d, lrelu, flatten
+# local
 from util import print_progress, fold, average_gradients, init_optimizer
+from models.model import Model
+from models.ops import dense, conv2d, deconv2d, lrelu, flatten, montage_summary, input_slice
 
 relu = tf.nn.relu
 var_scope = tf.variable_scope
@@ -39,39 +41,28 @@ class GAN(Model):
                 for gpu_id in range(args.n_gpus):
                     with tf.device(self.variables_on_cpu(gpu_id)):
                         with name_scope('tower_{}'.format(gpu_id)) as scope:
+                            # get slice for this GPU
+                            x_slice = input_slice(x, args.batch_size, gpu_id)
                             # build model  (note x is normalized to [-0.5, 0.5]
-                            z, g, d_real, d_fake = self.construct_model(x - 0.5, args, gpu_id)
-
+                            z, g, d_real, d_fake = self.build_model(x_slice - 0.5, args, gpu_id)
                             # generator (sample) summary
-                            with var_scope('generator_summaries'):
-                                s = tf.expand_dims(tf.concat(tf.unstack(g, num=args.batch_size, axis=0)[0:10], axis=1), axis=0)
-                                tf.summary.image('samples', s)
-                                
-                            # get losses and add summaries
-                            losses = tf.get_collection('losses', scope)
-                            for l in losses:
-                                tf.summary.scalar(self.tensor_name(l), l)
-                            g_loss, d_loss = losses
-
+                            montage_summary(x_slice, args, 'inputs')
+                            montage_summary(g, args, 'fake')
+                            # TODO this depends on order in which it was added to collection... not ideal
+                            # get losses and add summaries                            
+                            g_loss, d_loss = self.summarize_collection('losses', scope)
                             # reuse variables in next tower
                             tf.get_variable_scope().reuse_variables()
-
-                            # use the last tower's summaries
-                            summaries = tf.get_collection(tf.GraphKeys.SUMMARIES, scope)
-
                             # keep only one batchnorm update since one accumulates rapidly enough for both
                             batchnorm_updates = tf.get_collection(tf.GraphKeys.UPDATE_OPS, scope)
-
                             # compute and collect gradients for generator and discriminator
                             # restrict optimizer to vars for each component
                             g_vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope='model/generator')
                             d_vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope='model/discriminator')
                             with var_scope('compute_gradients/generator'):
-                                g_grads = g_opt.compute_gradients(g_loss, var_list=g_vars)
+                                g_tower_grads.append(g_opt.compute_gradients(g_loss, var_list=g_vars))
                             with var_scope('compute_gradients/discriminator'):
-                                d_grads = d_opt.compute_gradients(d_loss, var_list=d_vars)
-                            g_tower_grads.append(g_grads)
-                            d_tower_grads.append(d_grads)
+                                d_tower_grads.append(d_opt.compute_gradients(d_loss, var_list=d_vars))
 
             # back on the CPU
             with var_scope('training'):
@@ -80,39 +71,32 @@ class GAN(Model):
                     g_grads = average_gradients(g_tower_grads)
                 with var_scope('average_gradients/discriminator'):
                     d_grads = average_gradients(d_tower_grads)
-                        
                 # apply the gradients
                 with var_scope('apply_gradients/generator'):
                     g_apply_gradient_op = g_opt.apply_gradients(g_grads, global_step=tf.train.get_global_step())
                 with var_scope('apply_gradients/discriminator'):
                     d_apply_gradient_op = d_opt.apply_gradients(d_grads, global_step=tf.train.get_global_step())
-
                 # clip weights after each optimizer update
                 with var_scope('clip_weights/discriminator'):
                     clip_D = [p.assign(tf.clip_by_value(p, -0.01, 0.01)) for p in d_vars]
-                
                 # group training ops together
                 with var_scope('train_op'):
                     batchnorm_updates_op = tf.group(*batchnorm_updates)
-                    # d_step = [d_apply_gradient_op, batchnorm_updates_op] + clip_D
-                    # if self.wgan:
-                    #     d_step *= 5
-                    # self.train_op = tf.group(d_step + [g_apply_gradient_op])
                     if self.wgan:
-                        self.train_op = tf.group(d_apply_gradient_op, batchnorm_updates_op, *clip_D, g_apply_gradient_op)
+                        d_step = [d_apply_gradient_op, batchnorm_updates_op, *clip_D] * 5
+                        self.train_op = tf.group(*d_step, g_apply_gradient_op)
+                        # self.train_op = tf.group(d_apply_gradient_op, batchnorm_updates_op, *clip_D, g_apply_gradient_op)
                     else:
                         self.train_op = tf.group(d_apply_gradient_op, batchnorm_updates_op, g_apply_gradient_op)
-
-            # add summaries for the gradients
-            for grad, var in g_grads + d_grads:
-                if grad is not None:
-                    summaries.append(tf.summary.histogram(var.op.name + '/gradients', grad))
-
+                # summarize gradients
+                self.summarize_grads(g_grads + d_grads)
+                
             # combine all summary ops
+            summaries = tf.get_collection(tf.GraphKeys.SUMMARIES, scope)
             self.summary_op = tf.summary.merge(summaries)
 
     
-    def construct_model(self, x, args, gpu_id):
+    def build_model(self, x, args, gpu_id):
         """Constructs the inference and loss portion of the model.
         Returns a list of form (latent, generator, real discriminator, 
         fake discriminator), where each is the final output node of each 
@@ -126,13 +110,15 @@ class GAN(Model):
             g = self.build_generator(z, args.latent_size, (gpu_id > 0))
         # discriminator
         with var_scope('discriminator') as dscope:
-            # split batch between GPUs
-            with var_scope('sliced_input'):
-                sliced_input = x[gpu_id * args.batch_size:(gpu_id+1)*args.batch_size,:]
-            d_real = self.build_discriminator(sliced_input, (gpu_id>0))
+            d_real = self.build_discriminator(x, (gpu_id>0))
             d_fake = self.build_discriminator(g, True)
-
         # losses
+        self.build_losses(d_real, d_fake)
+        
+        return (z, g, d_real, d_fake)        
+
+    
+    def build_losses(self, d_real, d_fake):
         if self.wgan:
             with var_scope('losses/generator'):
                 g_loss = tf.negative(tf.reduce_sum(d_fake), name='g_loss')
@@ -146,8 +132,6 @@ class GAN(Model):
                 d_loss = tf.reduce_mean(-tf.log(d_real + 1e-8) - tf.log(1 - d_fake + 1e-8), name='d_loss')
         tf.add_to_collection('losses', g_loss)
         tf.add_to_collection('losses', d_loss)
-        
-        return (z, g, d_real, d_fake)
     
             
     def build_latent(self, batch_size, latent_size):
