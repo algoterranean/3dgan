@@ -45,67 +45,56 @@ class CNN(Model):
 
 
     def build_encoder(self, x, reuse=False):
-        """Input: 64x64x3. Output: 4x4x32."""
-        # layer_sizes = [64, 128, 256, 256, 96, 32] 
+        """Input: 64x64x3. Output: 4x4x32.
+        Layer sizes = 64, 128, 256, 256, 96, 32"""
+        
         with tf.variable_scope('conv1'):
             x = lrelu(conv2d(x, 3, 64, 5, 2, reuse=reuse, name='c1'))
             self.activation_summary(x)
-            
         with tf.variable_scope('conv2'):
             x = lrelu(conv2d(x, 64, 128, 5, 2, reuse=reuse, name='c2'))
             self.activation_summary(x)
-            
         with tf.variable_scope('conv3'):
             x = lrelu(conv2d(x, 128, 256, 5, 2, reuse=reuse, name='c3'))
             self.activation_summary(x)
-            
         with tf.variable_scope('conv4'):
             x = lrelu(conv2d(x, 256, 256, 5, 2, reuse=reuse, name='c4'))
             self.activation_summary(x)
-            
         with tf.variable_scope('conv5'):
             x = lrelu(conv2d(x, 256, 96, 1, reuse=reuse, name='c5'))
             self.activation_summary(x)
-            
         with tf.variable_scope('conv6'):
             x = lrelu(conv2d(x, 96, 32, 1, reuse=reuse, name='c6'))
             self.activation_summary(x)
-            
         tf.identity(x, name='sample')
         return x
 
     def build_decoder(self, x, latent_size, reuse=False):
-        """Input: 200. Output: 64x64x3."""
-        # layer sizes = [96, 256, 256, 128, 64]
+        """Input: 200. Output: 64x64x3.
+        Layer sizes = 96, 256, 256, 128, 64"""
+
         with tf.variable_scope('dense'):
             x = dense(x, latent_size, 32*4*4, reuse=reuse, name='d1')
             self.activation_summary(x)
-            
         with tf.variable_scope('conv1'):
             x = tf.reshape(x, [-1, 4, 4, 32]) # un-flatten
             x = tf.nn.relu(conv2d(x, 32, 96, 1, reuse=reuse, name='c1'))
             self.activation_summary(x)
-            
         with tf.variable_scope('conv2'):
             x = tf.nn.relu(conv2d(x, 96, 256, 1, reuse=reuse, name='c2'))
             self.activation_summary(x)
-            
         with tf.variable_scope('deconv1'):
             x = tf.nn.relu(deconv2d(x, 256, 256, 5, 2, reuse=reuse, name='dc1'))
             self.activation_summary(x)
-            
         with tf.variable_scope('deconv2'):
             x = tf.nn.relu(deconv2d(x, 256, 128, 5, 2, reuse=reuse, name='dc2'))
             self.activation_summary(x)
-            
         with tf.variable_scope('deconv3'):
             x = tf.nn.relu(deconv2d(x, 128, 64, 5, 2, reuse=reuse, name='dc3'))
             self.activation_summary(x)
-            
         with tf.variable_scope('deconv4'):
             x = tf.nn.sigmoid(deconv2d(x, 64, 3, 5, 2, reuse=reuse, name='dc4'))
             self.activation_summary(x)
-            
         tf.identity(x, name='sample')
         return x
 
@@ -122,15 +111,11 @@ class CNN(Model):
     def build_model(self, x, args, gpu_id):
         with tf.variable_scope('encoder'):
             encoder = self.build_encoder(x, (gpu_id > 0))
-
         with tf.variable_scope('latent'):
             latent = self.build_latent(encoder, args.latent_size, (gpu_id > 0))
-
         with tf.variable_scope('decoder'):
             decoder = self.build_decoder(latent, args.latent_size, (gpu_id > 0))
-        
         with tf.variable_scope('losses'):
             loss = tf.reduce_mean(tf.abs(x - decoder), name='loss')
         tf.add_to_collection('losses', loss)
-
         return (encoder, latent, decoder)

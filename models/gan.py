@@ -151,36 +151,28 @@ class GAN(Model):
         with var_scope('fit_and_reshape', reuse=reuse):
             x = relu(batch_norm(dense(x, batch_size, 32*4*4, reuse, name='d1')))
             x = tf.reshape(x, [-1, 4, 4, 32]) # un-flatten
-            
         with var_scope('conv1', reuse=reuse):
             b = conv2d(x, 32, 96, 1, reuse=reuse, name='c1')
             x = relu(batch_norm(b))
             self.activation_summary(x)
-            
         with var_scope('conv2', reuse=reuse):                
             x = relu(batch_norm(conv2d(x, 96, 256, 1, reuse=reuse, name='c2')))
             self.activation_summary(x)
-            
         with var_scope('deconv1', reuse=reuse):                
             x = relu(batch_norm(deconv2d(x, 256, 256, 5, 2, reuse=reuse, name='dc1')))
             self.activation_summary(x)
-            
         with var_scope('deconv2', reuse=reuse):                
             x = relu(batch_norm(deconv2d(x, 256, 128, 5, 2, reuse=reuse, name='dc2')))
             self.activation_summary(x)
-            
         with var_scope('deconv3', reuse=reuse):                
             x = relu(batch_norm(deconv2d(x, 128, 64, 5, 2, reuse=reuse, name='dc3')))
             self.activation_summary(x)
-            
         with var_scope('deconv4', reuse=reuse): 
             x = relu(batch_norm(deconv2d(x, 64, 3, 5, 2, reuse=reuse, name='dc4')))
             self.activation_summary(x)
-            
         with var_scope('output'):
             x = tf.tanh(x, name='out')
             self.activation_summary(x)
-            
         # sample node (for use in visualize.py)            
         tf.identity(x, name='sample')
         return x
@@ -189,31 +181,24 @@ class GAN(Model):
     def build_discriminator(self, x, reuse):
         """Builds a discriminator with layers of size
            64, 128, 256, 256, 96. Output is logits of final layer."""
-        
         with var_scope('conv1', reuse=reuse):
             x = lrelu(conv2d(x, 3, 64, 5, 2, reuse=reuse, name='c1'))
             self.activation_summary(x)
-            
         with var_scope('conv2', reuse=reuse):
             x = lrelu(batch_norm(conv2d(x, 64, 128, 5, 2, reuse=reuse, name='c2')))
             self.activation_summary(x)
-            
         with var_scope('conv3', reuse=reuse):
             x = lrelu(batch_norm(conv2d(x, 128, 256, 5, 2, reuse=reuse, name='c3')))
             self.activation_summary(x)
-            
         with var_scope('conv4', reuse=reuse):
             x = lrelu(batch_norm(conv2d(x, 256, 256, 5, 2, reuse=reuse, name='c4')))
             self.activation_summary(x)
-            
         with var_scope('conv5', reuse=reuse):
             x = lrelu(batch_norm(conv2d(x, 256, 96, 32, 1, reuse=reuse, name='c5')))
             self.activation_summary(x)
-            
         with var_scope('conv6', reuse=reuse):
             x = lrelu(batch_norm(conv2d(x, 96, 32, 1, reuse=reuse, name='c6')))
             self.activation_summary(x)
-            
         with var_scope('logits'):
             logits = flatten(x, name='flat1')
             if self.wgan:
@@ -221,7 +206,6 @@ class GAN(Model):
             else:
                 out = tf.nn.sigmoid(logits, name='out')
             self.activation_summary(out)
-            
         # sample node (for use in visualize.py)
         tf.identity(out, name='sample')
         return out
