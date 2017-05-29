@@ -1,4 +1,6 @@
 import tensorflow as tf
+import math
+import re
 from tensorflow.contrib.layers import xavier_initializer as xav_init
 from tensorflow.contrib.layers import variance_scaling_initializer as he_init
 from tensorflow.contrib.layers import batch_norm
@@ -28,8 +30,39 @@ def conv2d(x, input_size, output_size, ksize=3, stride=1, reuse=False, name=None
     with tf.variable_scope('vars', reuse=reuse):
         K = tf.get_variable(name=w_name, shape=[ksize, ksize, input_size, output_size], initializer=he_init())
         b = tf.get_variable(name=b_name, shape=[output_size], initializer=he_init())
+
+        #if input_size == 3 or input_size == 1:
+            #K_t = tf.transpose(K, [3, 0, 1, 2])
+            #images = tf.unstack(K_t, num=output_size, axis=0)
+            # print('num images', output_size)
+            # num_blanks = int(math.sqrt(output_size))**2 - output_size
+            # print('num_blanks', num_blanks)
+            # new_images = images + [np.zeros(images[0].shape) for n in range(num_blanks)]
+            # print('new image shape', images[0].shape)
+
+            # # chunks(new_images, int(math.sqrt(output_size)))
+
+            #m = tf.split(images, int(math.sqrt(output_size)), axis=1)
+            #tf.concat(m, axis=0)
+
+            # r = tf.expand_dims(tf.concat(images, axis=1), axis=0)
+            
+            #tf.summary.image(w_name, m)
+        # images = tf.unstack(K_t, num=output_size, axis=0)
+        # image = tf.concat(images, axis=1)
+        # image = tf.expand_dim
+
+
+        # print('weights:', K.shape)
+        # a = 
+        # print('a', a.shape)        
+        # print('biases:', b.shape)
+        
     h = tf.nn.conv2d(x, K, strides=[1, stride, stride, 1], padding='SAME')
     return h + b
+
+
+
 
 
 def upsize(x, factor, output_size):
@@ -54,14 +87,34 @@ def flatten(x, name=None):
     return tf.reshape(x, [-1, output_size], name=name)
 
 
-def montage_summary(x, args, name='montage'):
-    # batch_size = tf.shape(x[0])[0]
-    with tf.variable_scope('montage_summary'):
-        images = tf.unstack(x, num=args.batch_size, axis=0)[0:args.examples]
 
-        image = tf.concat(images, axis=1)
-        image = tf.expand_dims(image, axis=0)
-        return tf.summary.image('montage', image)
+def activation_summary(x, rows=0, cols=0, montage=True):
+    n = re.sub('tower_[0-9]*/', '', x.op.name)
+    tf.summary.histogram(n + '/activations', x)
+    tf.summary.scalar(n + '/sparsity', tf.nn.zero_fraction(x))
+    if montage:
+        montage_summary(tf.transpose(x[0], [2, 0, 1]), rows, cols, n + '/activtions')
+    
+
+def montage_summary(x, num_cols, num_rows, name='montage'):
+    num_examples = num_cols * num_rows
+    with tf.variable_scope(name):
+        images = x[0:num_examples] #, :, :, :]
+        images = tf.split(images, num_cols, axis=0)
+        images = tf.concat(images, axis=1)
+        images = tf.unstack(images, num_rows, axis=0)
+        images = tf.concat(images, axis=1)
+
+        
+        if len(images.shape) < 3:
+            images = tf.expand_dims(images, axis=2)
+        # else:
+        #     print('what shape for', name, images.shape)
+            
+            
+        images = tf.expand_dims(images, axis=0)
+        return tf.summary.image('montage', images)
+
 
 
 def input_slice(x, batch_size, gpu_id):

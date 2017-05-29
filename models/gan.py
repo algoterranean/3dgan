@@ -7,7 +7,7 @@ from sys import stdout
 # local
 from util import print_progress, fold, average_gradients, init_optimizer
 from models.model import Model
-from models.ops import dense, conv2d, deconv2d, lrelu, flatten, montage_summary, input_slice
+from models.ops import dense, conv2d, deconv2d, lrelu, flatten, montage_summary, input_slice, activation_summary
 
 relu = tf.nn.relu
 var_scope = tf.variable_scope
@@ -46,8 +46,8 @@ class GAN(Model):
                             # build model  (note x is normalized to [-0.5, 0.5]
                             z, g, d_real, d_fake = self.build_model(x_slice - 0.5, args, gpu_id)
                             # generator (sample) summary
-                            montage_summary(x_slice, args, 'inputs')
-                            montage_summary(g, args, 'fake')
+                            montage_summary(x_slice, 8, 8, 'inputs')
+                            montage_summary(g, 8, 8, 'fake')
                             # TODO this depends on order in which it was added to collection... not ideal
                             # get losses and add summaries                            
                             g_loss, d_loss = self.summarize_collection('losses', scope)
@@ -138,7 +138,7 @@ class GAN(Model):
         """Builds a latent node that samples from the Gaussian."""
         
         z = tf.random_normal([batch_size, latent_size], 0, 1)
-        self.activation_summary(z)
+        activation_summary(z, montage=False)
         # sample node (for use in visualize.py)
         tf.identity(z, name='sample')
         return z
@@ -154,25 +154,25 @@ class GAN(Model):
         with var_scope('conv1', reuse=reuse):
             b = conv2d(x, 32, 96, 1, reuse=reuse, name='c1')
             x = relu(batch_norm(b))
-            self.activation_summary(x)
+            activation_summary(x, 12, 8)
         with var_scope('conv2', reuse=reuse):                
             x = relu(batch_norm(conv2d(x, 96, 256, 1, reuse=reuse, name='c2')))
-            self.activation_summary(x)
+            activation_summary(x, 16, 16)
         with var_scope('deconv1', reuse=reuse):                
             x = relu(batch_norm(deconv2d(x, 256, 256, 5, 2, reuse=reuse, name='dc1')))
-            self.activation_summary(x)
+            activation_summary(x, 16, 16)
         with var_scope('deconv2', reuse=reuse):                
             x = relu(batch_norm(deconv2d(x, 256, 128, 5, 2, reuse=reuse, name='dc2')))
-            self.activation_summary(x)
+            activation_summary(x, 8, 16)
         with var_scope('deconv3', reuse=reuse):                
             x = relu(batch_norm(deconv2d(x, 128, 64, 5, 2, reuse=reuse, name='dc3')))
-            self.activation_summary(x)
+            activation_summary(x, 8, 8)
         with var_scope('deconv4', reuse=reuse): 
             x = relu(batch_norm(deconv2d(x, 64, 3, 5, 2, reuse=reuse, name='dc4')))
-            self.activation_summary(x)
+            activation_summary(x, montage=False)
         with var_scope('output'):
             x = tf.tanh(x, name='out')
-            self.activation_summary(x)
+            activation_summary(x, montage=False)
         # sample node (for use in visualize.py)            
         tf.identity(x, name='sample')
         return x
@@ -183,29 +183,29 @@ class GAN(Model):
            64, 128, 256, 256, 96. Output is logits of final layer."""
         with var_scope('conv1', reuse=reuse):
             x = lrelu(conv2d(x, 3, 64, 5, 2, reuse=reuse, name='c1'))
-            self.activation_summary(x)
+            activation_summary(x, 8, 8)
         with var_scope('conv2', reuse=reuse):
             x = lrelu(batch_norm(conv2d(x, 64, 128, 5, 2, reuse=reuse, name='c2')))
-            self.activation_summary(x)
+            activation_summary(x, 8, 16)
         with var_scope('conv3', reuse=reuse):
             x = lrelu(batch_norm(conv2d(x, 128, 256, 5, 2, reuse=reuse, name='c3')))
-            self.activation_summary(x)
+            activation_summary(x, 16, 16)
         with var_scope('conv4', reuse=reuse):
             x = lrelu(batch_norm(conv2d(x, 256, 256, 5, 2, reuse=reuse, name='c4')))
-            self.activation_summary(x)
+            activation_summary(x, 16, 16)
         with var_scope('conv5', reuse=reuse):
             x = lrelu(batch_norm(conv2d(x, 256, 96, 32, 1, reuse=reuse, name='c5')))
-            self.activation_summary(x)
+            activation_summary(x, 12, 8)
         with var_scope('conv6', reuse=reuse):
             x = lrelu(batch_norm(conv2d(x, 96, 32, 1, reuse=reuse, name='c6')))
-            self.activation_summary(x)
+            activation_summary(x, 8, 4)
         with var_scope('logits'):
             logits = flatten(x, name='flat1')
             if self.wgan:
                 out = tf.identity(logits, name='out')
             else:
                 out = tf.nn.sigmoid(logits, name='out')
-            self.activation_summary(out)
+            activation_summary(out, montage=False)
         # sample node (for use in visualize.py)
         tf.identity(out, name='sample')
         return out

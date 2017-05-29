@@ -3,7 +3,7 @@ import tensorflow as tf
 # local
 from util import average_gradients, init_optimizer
 from models.model import Model
-from models.ops import dense, conv2d, deconv2d, lrelu, flatten, input_slice, montage_summary
+from models.ops import dense, conv2d, deconv2d, lrelu, flatten, input_slice, montage_summary, activation_summary
 
 
     
@@ -30,8 +30,8 @@ class CNN(Model):
                             # reuse variables on next tower
                             tf.get_variable_scope().reuse_variables()
                             # add montage summaries
-                            montage_summary(x_slice, args, 'inputs')
-                            montage_summary(decoder, args, 'outputs')
+                            montage_summary(x_slice, 8, 8, 'inputs')
+                            montage_summary(decoder, 8, 8, 'outputs')
                             # compute gradients on this GPU
                             with tf.variable_scope('compute_gradients'):
                                 tower_grads.append(opt.compute_gradients(loss))
@@ -50,22 +50,22 @@ class CNN(Model):
         
         with tf.variable_scope('conv1'):
             x = lrelu(conv2d(x, 3, 64, 5, 2, reuse=reuse, name='c1'))
-            self.activation_summary(x)
+            activation_summary(x, 8, 8)
         with tf.variable_scope('conv2'):
             x = lrelu(conv2d(x, 64, 128, 5, 2, reuse=reuse, name='c2'))
-            self.activation_summary(x)
+            activation_summary(x, 8, 16)
         with tf.variable_scope('conv3'):
             x = lrelu(conv2d(x, 128, 256, 5, 2, reuse=reuse, name='c3'))
-            self.activation_summary(x)
+            activation_summary(x, 16, 16)
         with tf.variable_scope('conv4'):
             x = lrelu(conv2d(x, 256, 256, 5, 2, reuse=reuse, name='c4'))
-            self.activation_summary(x)
+            activation_summary(x, 16, 16)
         with tf.variable_scope('conv5'):
             x = lrelu(conv2d(x, 256, 96, 1, reuse=reuse, name='c5'))
-            self.activation_summary(x)
+            activation_summary(x, 12, 8)
         with tf.variable_scope('conv6'):
             x = lrelu(conv2d(x, 96, 32, 1, reuse=reuse, name='c6'))
-            self.activation_summary(x)
+            activation_summary(x, 8, 4)
         tf.identity(x, name='sample')
         return x
 
@@ -75,26 +75,26 @@ class CNN(Model):
 
         with tf.variable_scope('dense'):
             x = dense(x, latent_size, 32*4*4, reuse=reuse, name='d1')
-            self.activation_summary(x)
+            activation_summary(x, montage=False)
         with tf.variable_scope('conv1'):
             x = tf.reshape(x, [-1, 4, 4, 32]) # un-flatten
             x = tf.nn.relu(conv2d(x, 32, 96, 1, reuse=reuse, name='c1'))
-            self.activation_summary(x)
+            activation_summary(x, 8, 4)
         with tf.variable_scope('conv2'):
             x = tf.nn.relu(conv2d(x, 96, 256, 1, reuse=reuse, name='c2'))
-            self.activation_summary(x)
+            activation_summary(x, 16, 16)
         with tf.variable_scope('deconv1'):
             x = tf.nn.relu(deconv2d(x, 256, 256, 5, 2, reuse=reuse, name='dc1'))
-            self.activation_summary(x)
+            activation_summary(x, 16, 16)
         with tf.variable_scope('deconv2'):
             x = tf.nn.relu(deconv2d(x, 256, 128, 5, 2, reuse=reuse, name='dc2'))
-            self.activation_summary(x)
+            activation_summary(x, 8, 16)
         with tf.variable_scope('deconv3'):
             x = tf.nn.relu(deconv2d(x, 128, 64, 5, 2, reuse=reuse, name='dc3'))
-            self.activation_summary(x)
+            activation_summary(x, 8, 8)
         with tf.variable_scope('deconv4'):
             x = tf.nn.sigmoid(deconv2d(x, 64, 3, 5, 2, reuse=reuse, name='dc4'))
-            self.activation_summary(x)
+            activation_summary(x, montage=False)
         tf.identity(x, name='sample')
         return x
 

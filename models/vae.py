@@ -2,10 +2,12 @@
 import tensorflow as tf
 import numpy as np
 import time
+import math
+import re
 from sys import stdout
 # local
 from util import print_progress, fold, average_gradients, init_optimizer
-from models.ops import dense, conv2d, deconv2d, lrelu, flatten, montage_summary, input_slice
+from models.ops import dense, conv2d, deconv2d, lrelu, flatten, montage_summary, input_slice, activation_summary
 from models.model import Model
 
 
@@ -33,9 +35,10 @@ class VAE(Model):
                             # reuse variables in next tower
                             tf.get_variable_scope().reuse_variables()
                             # add summaries for examples and samples
-                            montage_summary(x_slice, args, 'inputs')
-                            montage_summary(decoder_real, args, 'real')
-                            montage_summary(decoder_fake, args, 'fake')
+                            ne = int(math.sqrt(args.examples))
+                            montage_summary(x_slice, ne, ne, 'inputs')
+                            montage_summary(decoder_real, ne, ne, 'real')
+                            montage_summary(decoder_fake, ne, ne, 'fake')
                             # compute and collect gradients for generator and discriminator
                             with tf.variable_scope('compute_gradients'):
                                 tower_grads.append(opt.compute_gradients(d_loss))
@@ -61,10 +64,9 @@ class VAE(Model):
             decoder_fake = self.build_decoder(samples, args.latent_size, reuse=True)
         # losses
         self.build_losses(x, z_mean, z_stddev, decoder_real)
-
         return (encoder, z, z_mean, z_stddev, decoder_real, decoder_fake)
-        
 
+    
     def build_losses(self, x, z_mean, z_stddev, decoder):
         with tf.variable_scope('losses/decoder'):
             exp = x * tf.log(1e-8 + decoder) + (1 - x) * tf.log(1e-8 + (1 - decoder))
@@ -85,22 +87,31 @@ class VAE(Model):
 
         with tf.variable_scope('conv1'):
             x = lrelu(conv2d(x, 3, 64, 5, 2, reuse=reuse, name='c1'))
-            self.activation_summary(x)
+            activation_summary(x, 8, 8)
+            # self.activation_summary(x)
+            # montage_summary(tf.transpose(x[0], [2, 0, 1]), 8, 8, name='conv1_activations')
+            
         with tf.variable_scope('conv2'):
             x = lrelu(conv2d(x, 64, 128, 5, 2, reuse=reuse, name='c2'))
-            self.activation_summary(x)
+            activation_summary(x, 8, 16)
+            # montage_summary(tf.transpose(x[0], [2, 0, 1]), 8, 16, name='conv2_activations')
+            
         with tf.variable_scope('conv3'):
             x = lrelu(conv2d(x, 128, 256, 5, 2, reuse=reuse, name='c3'))
-            self.activation_summary(x)
+            activation_summary(x, 16, 16)
+            
         with tf.variable_scope('conv4'):
             x = lrelu(conv2d(x, 256, 256, 5, 2, reuse=reuse, name='c4'))
-            self.activation_summary(x)
+            activation_summary(x, 16, 16)
+            
         with tf.variable_scope('conv5'):
             x = lrelu(conv2d(x, 256, 96, 1, reuse=reuse, name='c5'))
-            self.activation_summary(x)
+            activation_summary(x, 12, 8)
+            
         with tf.variable_scope('conv6'):
             x = lrelu(conv2d(x, 96, 32, 1, reuse=reuse, name='c6'))
-            self.activation_summary(x)
+            activation_summary(x, 8, 4)
+            
         tf.identity(x, name='sample')
         return x
 
@@ -112,15 +123,15 @@ class VAE(Model):
             flat = flatten(x)
         with tf.variable_scope('mean'):
             z_mean = dense(flat, 32*4*4, latent_size, reuse=reuse, name='d1')
-            self.activation_summary(z_mean)
+            activation_summary(z_mean, montage=False)
         with tf.variable_scope('stddev'):
             z_stddev = dense(flat, 32*4*4, latent_size, reuse=reuse, name='d2')
-            self.activation_summary(z_stddev)
+            activation_summary(z_stddev, montage=False)
         with tf.variable_scope('gaussian'):
             samples = tf.random_normal([batch_size, latent_size], 0, 1, dtype=tf.float32)
-            self.activation_summary(samples)
+            activation_summary(samples, montage=False)
             z = (z_mean + (z_stddev * samples))
-            self.activation_summary(z)
+            activation_summary(z, montage=False)
         tf.identity(z, name='sample')
         return (samples, z, z_mean, z_stddev)
 
@@ -131,26 +142,30 @@ class VAE(Model):
         
         with tf.variable_scope('dense'):
             x = dense(x, latent_size, 32*4*4, reuse=reuse, name='d1')
-            self.activation_summary(x)
+            activation_summary(x, montage=False)
+            
         with tf.variable_scope('conv1'):
             x = tf.reshape(x, [-1, 4, 4, 32]) # un-flatten
             x = tf.nn.relu(conv2d(x, 32, 96, 1, reuse=reuse, name='c1'))
-            self.activation_summary(x)
+            activation_summary(x, 12, 8)
+            
         with tf.variable_scope('conv2'):
             x = tf.nn.relu(conv2d(x, 96, 256, 1, reuse=reuse, name='c2'))
-            self.activation_summary(x)
+            activation_summary(x, 16, 16)
+            
         with tf.variable_scope('deconv1'):
             x = tf.nn.relu(deconv2d(x, 256, 256, 5, 2, reuse=reuse, name='dc1'))
-            self.activation_summary(x)
+            activation_summary(x, 16, 16)
+            
         with tf.variable_scope('deconv2'):
             x = tf.nn.relu(deconv2d(x, 256, 128, 5, 2, reuse=reuse, name='dc2'))
-            self.activation_summary(x)
+            activation_summary(x, 8, 16)
         with tf.variable_scope('deconv3'):
             x = tf.nn.relu(deconv2d(x, 128, 64, 5, 2, reuse=reuse, name='dc3'))
-            self.activation_summary(x)
+            activation_summary(x, 8, 8)
         with tf.variable_scope('deconv4'):
             x = tf.nn.sigmoid(deconv2d(x, 64, 3, 5, 2, reuse=reuse, name='dc4'))
-            self.activation_summary(x)
+            activation_summary(x, montage=False)
         tf.identity(x, name='sample')
         return x
 

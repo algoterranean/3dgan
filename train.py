@@ -56,9 +56,10 @@ if __name__ == '__main__':
                                         Default: 3.""")
     train_args.add_argument('--batch_size', type=int, default=256,
                                 help='Batch size _per GPU_. Default: 256.')
-    train_args.add_argument('--examples', type=int, default=10,
+    train_args.add_argument('--examples', type=int, default=64,
                                 help="""Number of examples to generate when sampling from 
-                                        generative models (if supported). Default: 10.""")
+                                        generative models (if supported). Default: 10.
+                                        NOTE: Must be a power of 2!""")
     train_args.add_argument('--dir', type=str, default='workspace/{}'.format(uuid.uuid4()),
                                 help="""Location to store checkpoints, logs, etc. If this 
                                         location is populated by a previous run then training 
@@ -168,6 +169,7 @@ if __name__ == '__main__':
             else:
                 sess.run(train_op, options=run_options, run_metadata=run_metadata)
             the_step += 1
+
                 
     print('Steps:', the_step)
     debug('\nTraining complete! Elapsed time: {}s'.format(int(time.time() - start_time)))

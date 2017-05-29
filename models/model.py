@@ -17,6 +17,7 @@ class Model:
         n = self.tensor_name(x)
         tf.summary.histogram(n + '/activations', x)
         tf.summary.scalar(n + '/sparsity', tf.nn.zero_fraction(x))
+
         
     def variables_on_cpu(self, gpu_id):
         def helper(op):
