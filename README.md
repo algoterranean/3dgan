@@ -1,7 +1,9 @@
 
 # Autoencoders and GANs in Tensorflow
 
-Example autoencoder and GAN implementations in Tensorflow. 
+Example autoencoder and GAN implementations in Tensorflow. While the code supports numerous models, datasets, 
+and options "out of the box", it is also designed to be used as a solid foundation for writing your own 
+models and training methods.
 
 ## Models
 
