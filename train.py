@@ -17,6 +17,9 @@ from os import path
 from models.cnn import CNN
 from models.vae import VAE
 from models.gan import GAN
+from models.dcgan import DCGAN
+from models.test import Test
+from models.test2 import Test2
 from msssim import MultiScaleSSIM, tf_ssim, tf_ms_ssim
 from util import *
 
@@ -64,6 +67,13 @@ if __name__ == '__main__':
                                 help="""Location to store checkpoints, logs, etc. If this 
                                         location is populated by a previous run then training 
                                         will be continued from last checkpoint.""")
+    train_args.add_argument('--summary_freq', type=int, default=30,
+                                help="""Run summary op every n seconds.
+                                        Default: 100.""")
+    train_args.add_argument('--n_disc_train', type=int, default=5,
+                                help="""Number of times to train discriminator before 
+                                        training generator (if applicable).
+                                        Default: 5. """)
     # optimizer settings
     optimizer_args.add_argument('--optimizer', type=lambda s: s.lower(), default='rmsprop',
                                     help='Optimizer to use during training. Default: rmsprop.')
@@ -82,6 +92,12 @@ if __name__ == '__main__':
     optimizer_args.add_argument('--centered',    default=False, action='store_true',
                                     help="""Enables centering in RMSProp optimizer. 
                                             Default: False.""")
+    optimizer_args.add_argument('--beta1', type=float, default=0.9,
+                                    help="""Value for optimizer's beta_1 (if supported).
+                                            Default: 0.9.""")
+    optimizer_args.add_argument('--beta2', type=float, default=0.999,
+                                    help="""Value for optimizer's beta_2 (if supported).
+                                            Default: 0.999.""")
     # model settings
     model_args.add_argument('--model', type=lambda s: s.lower(), default='fc',
                                 help='Name of model to train. Default: fc.')
@@ -108,7 +124,8 @@ if __name__ == '__main__':
     
     # init globals
     with tf.device('/cpu:0'):
-        global_step = tf.Variable(0, name='global_step', trainable=False)
+        global_step = tf.Variable(0, trainable=False, name='global_step')
+        # global_step = tf.get_variable('global_step', [], initializer=tf.constant_initializer(0), trainable=False)
         # save the arguments to the graph
         with tf.variable_scope('args'):
             for a in vars(args):
@@ -118,6 +135,8 @@ if __name__ == '__main__':
     # setup input pipeline
     d = get_dataset(args.dataset)
     x = d.batch_tensor(args.batch_size * args.n_gpus, args.epochs)
+
+    # x = tf.image.resize_images(x, [32, 32])
 
     # setup model
     debug('Initializing model...')
@@ -129,47 +148,39 @@ if __name__ == '__main__':
         model = VAE(x, args)
     elif args.model == 'cnn':
         model = CNN(x, args)
-    train_op = model.train_op
+    elif args.model == 'dcgan':
+        model = DCGAN(x, args)
+    elif args.model == 'test':
+        model = Test(x, args)
+    elif args.model == 'test2':
+        model = Test2(x, args)
     losses = collection_to_dict(tf.get_collection('losses'))
-    init_op = tf.group(tf.global_variables_initializer(), tf.local_variables_initializer())    
+    init_op = tf.group(tf.global_variables_initializer(), tf.local_variables_initializer())
 
     # supervisor
     debug('Initializing supervisor...')
-    supervisor = tf.train.Supervisor(logdir=args.dir, #os.path.join(args.dir, 'logs'),
+    supervisor = tf.train.Supervisor(logdir=args.dir,
                                          init_op=init_op,
-                                         summary_op=None, #model.summary_op,
+                                         summary_op=model.summary_op,
                                          global_step=global_step,
-                                         save_summaries_secs=0,
-                                         save_model_secs=300)
+                                         save_summaries_secs=120,
+                                         save_model_secs=600)
 
     # profiling (optional)
     # requires adding libcupti.so.8.0 to LD_LIBRARY_PATH.
-    # location is /cuda_dir/extras/CUPTI/lib64
+    # (location is /cuda_dir/extras/CUPTI/lib64)
     run_options = tf.RunOptions(trace_level=tf.RunOptions.FULL_TRACE) if args.profile else None
     run_metadata = tf.RunMetadata() if args.profile else None
 
-    print('input size:', x.shape)
-
-    
     # training
     ######################################################################
     session_config = tf.ConfigProto(allow_soft_placement=True)
     with supervisor.managed_session(config=session_config) as sess:
-        # h = status_tracker(losses, global_step)
         start_time = time.time()
+        supervisor.loop(args.summary_freq, status_tracker, args=(sess, global_step, losses, start_time))
         debug('Starting training...')
-        the_step = 0
 
         while not supervisor.should_stop():
-            if the_step % 100 == 0:
-                _, summary_results, loss_results, gs = sess.run([train_op, model.summary_op, losses, global_step],
-                                                                    options=run_options, run_metadata=run_metadata)
-                print_progress(gs, loss_results, start_time)
-                supervisor.summary_computed(sess, summary_results)
-            else:
-                sess.run(train_op, options=run_options, run_metadata=run_metadata)
-            the_step += 1
-
-                
-    print('Steps:', the_step)
+            model.train(sess, args)
+            
     debug('\nTraining complete! Elapsed time: {}s'.format(int(time.time() - start_time)))

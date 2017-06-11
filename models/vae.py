@@ -6,11 +6,14 @@ import math
 import re
 from sys import stdout
 # local
-from util import print_progress, fold, average_gradients, init_optimizer
+from util import print_progress, fold, average_gradients, init_optimizer, variables_on_cpu, summarize_collection
 from models.ops import dense, conv2d, deconv2d, lrelu, flatten, montage_summary, input_slice, activation_summary
 from models.model import Model
 
 
+# Sources:
+# - Auto-Encoding Variational Bayes
+#   https://arxiv.org/abs/1312.6114
 
 
 class VAE(Model):
@@ -24,24 +27,25 @@ class VAE(Model):
 
             with tf.variable_scope('model') as scope:
                 for gpu_id in range(args.n_gpus):
-                    with tf.device(self.variables_on_cpu(gpu_id)):
+                    with tf.device(variables_on_cpu(gpu_id)):
                         with tf.name_scope('tower_{}'.format(gpu_id)) as scope:
                             # get slice for this GPU
                             x_slice = input_slice(x, args.batch_size, gpu_id)
                             # model
                             encoder, z, z_mean, z_stddev, decoder_real, decoder_fake = self.build_model(x_slice, args, gpu_id)
                             # loss
-                            g_loss, l_loss, d_loss = self.summarize_collection('losses', scope)
+                            g_loss, l_loss, d_loss = summarize_collection('losses', scope)
                             # reuse variables in next tower
                             tf.get_variable_scope().reuse_variables()
                             # add summaries for examples and samples
                             ne = int(math.sqrt(args.examples))
-                            montage_summary(x_slice, ne, ne, 'inputs')
-                            montage_summary(decoder_real, ne, ne, 'real')
-                            montage_summary(decoder_fake, ne, ne, 'fake')
+                            montage_summary(x_slice[0:args.examples], name='examples/inputs')
+                            montage_summary(decoder_real[0:args.examples], ne, ne, name='examples/real')
+                            montage_summary(decoder_fake[0:args.examples], ne, ne, name='examples/fake')
                             # compute and collect gradients for generator and discriminator
                             with tf.variable_scope('compute_gradients'):
                                 tower_grads.append(opt.compute_gradients(d_loss))
+                            
 
             # back on the CPU
             with tf.variable_scope('training'):
@@ -88,30 +92,21 @@ class VAE(Model):
         with tf.variable_scope('conv1'):
             x = lrelu(conv2d(x, 3, 64, 5, 2, reuse=reuse, name='c1'))
             activation_summary(x, 8, 8)
-            # self.activation_summary(x)
-            # montage_summary(tf.transpose(x[0], [2, 0, 1]), 8, 8, name='conv1_activations')
-            
         with tf.variable_scope('conv2'):
             x = lrelu(conv2d(x, 64, 128, 5, 2, reuse=reuse, name='c2'))
             activation_summary(x, 8, 16)
-            # montage_summary(tf.transpose(x[0], [2, 0, 1]), 8, 16, name='conv2_activations')
-            
         with tf.variable_scope('conv3'):
             x = lrelu(conv2d(x, 128, 256, 5, 2, reuse=reuse, name='c3'))
             activation_summary(x, 16, 16)
-            
         with tf.variable_scope('conv4'):
             x = lrelu(conv2d(x, 256, 256, 5, 2, reuse=reuse, name='c4'))
             activation_summary(x, 16, 16)
-            
         with tf.variable_scope('conv5'):
             x = lrelu(conv2d(x, 256, 96, 1, reuse=reuse, name='c5'))
             activation_summary(x, 12, 8)
-            
         with tf.variable_scope('conv6'):
             x = lrelu(conv2d(x, 96, 32, 1, reuse=reuse, name='c6'))
             activation_summary(x, 8, 4)
-            
         tf.identity(x, name='sample')
         return x
 
@@ -143,20 +138,16 @@ class VAE(Model):
         with tf.variable_scope('dense'):
             x = dense(x, latent_size, 32*4*4, reuse=reuse, name='d1')
             activation_summary(x, montage=False)
-            
         with tf.variable_scope('conv1'):
             x = tf.reshape(x, [-1, 4, 4, 32]) # un-flatten
             x = tf.nn.relu(conv2d(x, 32, 96, 1, reuse=reuse, name='c1'))
             activation_summary(x, 12, 8)
-            
         with tf.variable_scope('conv2'):
             x = tf.nn.relu(conv2d(x, 96, 256, 1, reuse=reuse, name='c2'))
             activation_summary(x, 16, 16)
-            
         with tf.variable_scope('deconv1'):
             x = tf.nn.relu(deconv2d(x, 256, 256, 5, 2, reuse=reuse, name='dc1'))
             activation_summary(x, 16, 16)
-            
         with tf.variable_scope('deconv2'):
             x = tf.nn.relu(deconv2d(x, 256, 128, 5, 2, reuse=reuse, name='dc2'))
             activation_summary(x, 8, 16)

@@ -25,11 +25,20 @@ class TFRecordsDataset:
                                                 min_after_dequeue=1000)
         return images
 
+
+    # img_1d = np.fromstring(img_string, dtype=np.uint8)
+    
+
     def _read_and_decode(self, filename_queue): #, normalize=False):
         reader = tf.TFRecordReader()
         _, serialized_example = reader.read(filename_queue)
         features = tf.parse_single_example(serialized_example, features=self.feature_def)
         image = tf.decode_raw(features['image_raw'], tf.uint8)
+
+        # img_string = features
+
+        # img_1d = np.fromstring(img_string, dtype=np.uint8)
+
 
         # get size of flattened shape
         c = 1
@@ -38,7 +47,11 @@ class TFRecordsDataset:
 
         image.set_shape([c])
         image = tf.reshape(image, self.image_shape)
-        image = tf.cast(image, tf.float32) * (1.0 / 255.0) #- 0.5
+        image = tf.cast(image, tf.float32) / 255.0
+        # image = image / 255.0
+        # image = tf.cast(image, tf.float32) * (1.0 / 255.0)
+        # image = tf.image.resize_images(image, [64, 64])
+        # image = tf.image.per_image_standardization(image)
         # if normalize:
         #     image = image - 0.5
         return image

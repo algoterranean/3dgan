@@ -6,13 +6,56 @@ import sys
 import cv2
 import shutil
 import time
-import pickle 
+import pickle
+import re
 # local
 # from data import Floorplans
 from data import TFRecordsDataset
 
 
+
+def tower_scope_range(n_gpus):
+    """
+    Iterator and scope generator for wrapping around model 
+    construction in multi-GPU environments.
+    """
+    with tf.variable_scope(tf.get_variable_scope()):
+        for i in range(n_gpus):
+            with tf.device(variables_on_cpu(i)):
+                with tf.name_scope('tower_{}'.format(i)) as scope:
+                    yield scope, i
+
+
+def tensor_name(x):
+    """
+    Remove tower prefix from tensor name.
+    """
+    return re.sub('tower_[0-9]*/', '', x.op.name)
+
+
+def variables_on_cpu(gpu_id):
+    """
+    Keeps variables on the CPU when used in tf.device().
+    """
+    def helper(op):
+        return '/cpu:0' if op.type == 'VariableV2' else '/gpu:{}'.format(gpu_id)
+    return helper
+
+
+def summarize_collection(name, scope):
+    """
+    Add a scalar summary for every tensor in a collection.
+    """
+    collection = tf.get_collection(name, scope)
+    for x in collection:
+        tf.summary.scalar(tensor_name(x), x)
+    return collection
+
+
 def average_gradients(tower_grads):
+    """
+    Average the gradients from all GPU towers.
+    """
     average_grads = []
     for grad_and_vars in zip(*tower_grads):
         # Note that each grad_and_vars looks like the following:
@@ -24,8 +67,9 @@ def average_gradients(tower_grads):
             # Append on a 'tower' dimension which we will average over below.
             grads.append(expanded_g)
         # Average over the 'tower' dimension.
-        grad = tf.concat(grads, 0)
+        grad = tf.concat(axis=0, values=grads)
         grad = tf.reduce_mean(grad, 0)
+        # print('GRAD', grad)
         # Keep in mind that the Variables are redundant because they are shared
         # across towers. So .. we will just return the first tower's pointer to
         # the Variable.
@@ -52,7 +96,7 @@ def init_optimizer(args):
         elif args.optimizer == 'momentum':            
             return tf.train.MomentumOptimizer(args.lr, args.momentum)
         elif args.optimizer == 'adam':
-            return tf.train.AdamOptimizer(args.lr)
+            return tf.train.AdamOptimizer(args.lr, args.beta1, args.beta2)
         elif args.optimizer == 'ftrl':
             return tf.train.FtrlOptimizer(args.lr)
 
@@ -88,12 +132,10 @@ def print_progress(iterations, loss_dict, start_time):
     sys.stdout.flush()
 
 
-def status_tracker(losses, global_step):
-    start_time = time.time()
-    def helper(sess):
-        l, step = sess.run([losses, global_step])
-        print_progress(step, l, start_time)
-    return helper
+def status_tracker(sess, global_step, losses, start_time):
+    l, step = sess.run([losses, global_step])
+    print_progress(step, l, start_time)
+
     
 
 def get_dataset(name):
@@ -104,6 +146,10 @@ def get_dataset(name):
         return TFRecordsDataset([os.path.join('data', 'floorplans.64.train.tfrecords')],
                                     {'image_raw': tf.FixedLenFeature([], tf.string)},
                                     [64, 64, 3])
+    elif name == 'cifar':
+        return TFRecordsDataset([os.path.join('data', 'cifar.32.train.tfrecords')],
+                                    {'image_raw': tf.FixedLenFeature([], tf.string)},
+                                    [32, 32, 3])
 
 
 def prep_workspace(dirname):

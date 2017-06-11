@@ -13,22 +13,22 @@ class Model:
         return re.sub('tower_[0-9]*/', '', x.op.name)
 
     
-    def activation_summary(self, x):
-        n = self.tensor_name(x)
-        tf.summary.histogram(n + '/activations', x)
-        tf.summary.scalar(n + '/sparsity', tf.nn.zero_fraction(x))
-
+    # def activation_summary(self, x):
+    #     n = self.tensor_name(x)
+    #     tf.summary.histogram(n + '/activations', x)
+    #     tf.summary.scalar(n + '/sparsity', tf.nn.zero_fraction(x))
         
-    def variables_on_cpu(self, gpu_id):
-        def helper(op):
-            return '/cpu:0' if op.type == 'VariableV2' else '/gpu:{}'.format(gpu_id)
-        return helper
+    # def variables_on_cpu(self, gpu_id):
+    #     def helper(op):
+    #         return '/cpu:0' if op.type == 'VariableV2' else '/gpu:{}'.format(gpu_id)
+    #     return helper
 
-    def summarize_collection(self, name, scope):
-        collection = tf.get_collection(name, scope)
-        for x in collection:
-            tf.summary.scalar(self.tensor_name(x), x)
-        return collection
+    # def summarize_collection(self, name, scope):
+    #     collection = tf.get_collection(name, scope)
+    #     for x in collection:
+    #         tf.summary.scalar(self.tensor_name(x), x)
+    #     return collection
+    
 
     def average_and_apply_grads(self, tower_grads, opt):
         with tf.variable_scope('average_gradients'):
@@ -42,6 +42,9 @@ class Model:
     def summarize_grads(self, grads):
         for grad, var in grads:
             if grad is not None:
-                tf.summary.histogram(var.op.name + '/gradients', grad)
+                n = re.sub('tower_[0-9]*/', '', var.op.name).split('/')[-1]
+                tf.summary.histogram(n + '/gradients', grad)
 
-
+    def train(self, sess, args):
+        """Default training method."""
+        sess.run(self.train_op)
