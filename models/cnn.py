@@ -1,15 +1,20 @@
-# global
+"""Implementation of traditional convolutional autoencoder."""
+
+from __future__ import absolute_import
+from __future__ import division
+from __future__ import print_function
+
 import tensorflow as tf
-# local
+
 from util import average_gradients, init_optimizer
-from models.model import Model
-from models.ops import dense, conv2d, deconv2d, lrelu, flatten, input_slice, montage_summary, activation_summary
+from model import Model
+from ops.layers import dense, conv2d, deconv2d, flatten
+from ops.summaries import montage_summary, activation_summary
+from ops.input import input_slice
+from ops.activations import lrelu
 
 
-    
 # TODO: build decoder from same weights as encoder
-
-
 
 class CNN(Model):
     def __init__(self, x, args):

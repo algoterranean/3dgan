@@ -1,23 +1,33 @@
-# global
+"""Implementation of variational auto-encoder."""
+
+from __future__ import absolute_import
+from __future__ import division
+from __future__ import print_function
+
 import tensorflow as tf
 import numpy as np
 import time
 import math
 import re
 from sys import stdout
-# local
+
 from util import print_progress, fold, average_gradients, init_optimizer, variables_on_cpu, summarize_collection
-from models.ops import dense, conv2d, deconv2d, lrelu, flatten, montage_summary, input_slice, activation_summary
-from models.model import Model
+from ops.layers import dense, conv2d, deconv2d, flatten
+from ops.summaries import montage_summary, activation_summary
+from ops.input import input_slice
+from ops.activations import lrelu
+from model import Model
 
-
-# Sources:
-# - Auto-Encoding Variational Bayes
-#   https://arxiv.org/abs/1312.6114
 
 
 class VAE(Model):
-    """Variational Autoencoder with multi-GPU support."""
+    """Implementation of variational autoencoder.
+
+    Sources:
+    -------
+    - Auto-Encoding Variational Bayes
+    https://arxiv.org/abs/1312.6114
+    """
     
     def __init__(self, x, args):
         

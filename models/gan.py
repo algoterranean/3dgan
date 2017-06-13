@@ -1,287 +1,246 @@
-# global
+"""Implementation of a few generative adversarial networks."""
+
+from __future__ import absolute_import
+from __future__ import division
+from __future__ import print_function
+
+import numpy as np
 import tensorflow as tf
 from tensorflow.contrib.layers import batch_norm
-import numpy as np
-import time
-import re
-from sys import stdout
-# local
-from util import * 
-from models.model import Model
-from models.ops import *
+from tensorflow.contrib.framework.python.ops.arg_scope import arg_scope
 
-TRAINABLE_VARIABLES = tf.GraphKeys.TRAINABLE_VARIABLES
-SUMMARIES = tf.GraphKeys.SUMMARIES
-UPDATE_OPS = tf.GraphKeys.UPDATE_OPS
-
-
-
-# Sources:
-# - Wasserstein GAN
-#   https://arxiv.org/abs/1701.07875
-# 
-# - Improved Training of Wasserstein GANs
-#   https://arxiv.org/abs/1704.00028
-# 
-# - batch norm discussion for multi-gpu training:
-#   https://github.com/tensorflow/tensorflow/issues/4361
-
-
-# Example:
-#
-# python train.py --model wgan
-#                 --data cifar
-#                 --optimizer adam
-#                 --beta1 0.5
-#                 --beta2 0.9
-#                 --lr 1e-4
-#                 --batch_size 512
-#                 --epochs 100
-#                 --n_gpus 2
-#                 --dir workspace/cifar_test
-# 
-# Note: Improved wgan paper used 200,000 iterations at batch size of 64,
-#       and cifar-10 has 50,000 test images per epoch, for 256 total epochs.
+from util import tower_scope_range, average_gradients, init_optimizer, tensor_name
+from model import Model
+from ops.input import input_slice
+from ops.layers import dense, conv2d, deconv2d, flatten
+from ops.activations import lrelu
+from ops.summaries import montage_summary, summarize_gradients
 
 
 
 class GAN(Model):
-    """Vanilla Generative Adversarial Network with multi-GPU support.
+    """Implementation of Vanilla GAN, Wasserstein GAN, and Improved
+    Wasserstein GAN (denoted GAN, WGAN, and IWGAN, respectively).
 
-    All variables are pinned to the CPU and shared between GPUs. 
-    Gradients are collected on the CPU, averaged, and applied back to each GPU.
-    We only keep one set of batch norm updates and include it as part of the train op.
+    Which model is added to the graph is based on args.model ('gan',
+    'wgan', or 'iwgan'), along with the other associated arguments
+    (e.g. args.optimizer, args.latent_size, etc.) Supports multi-GPU
+    training.
+
+    Sources:
+    -------
+    - `Generative Adversarial Networks`
+    https://arxiv.org/abs/1406.2661
+
+    - `Wasserstein GAN`
+    https://arxiv.org/abs/1701.07875
+
+    - `Improved Training of Wasserstein GANs`
+    https://arxiv.org/abs/1704.00028
     """
     
-    def __init__(self, x, args, wgan=False):
-        self.wgan = wgan
-        global_step = tf.train.get_global_step()
+    def __init__(self, x, args):
+        """Initialize model.
         
+        Args:
+          x: Tensor, the real images.
+          args: Argparse structure.
+        """
+
         with tf.device('/cpu:0'):
             g_opt, d_opt = init_optimizer(args), init_optimizer(args)
             g_tower_grads, d_tower_grads = [], []
 
-            # x = tf.image.resize_images(x, [64, 64])
-
-            # rescale from [0,1] to [-1,1]
+            # flatten and rescale [0,1] to [-1,1]
+            x = flatten(x)
             x = 2 * (x- 0.5)
+            
+            for x, scope, gpu_id in tower_scope_range(x, args.n_gpus, args.batch_size):
+                # instantiate model on this GPU
+                # x_slice = input_slice(x, args.batch_size, gpu_id)
+                g = self.generator(args, reuse=(gpu_id>0))
+                d_real = self.discriminator(x, args, reuse=(gpu_id>0))
+                d_fake = self.discriminator(g, args, reuse=True)
 
-            # general model towers on each GPU
-            for scope, gpu_id in tower_scope_range(args.n_gpus):
-                # model and losses
-                x_slice = input_slice(x, args.batch_size, gpu_id)
-                z, g, d_real, d_fake = self.build_model(x_slice, args, gpu_id)
-                g_loss, d_loss = tf.get_collection('losses', scope)
-
-                # summaries
-                real_images = (x_slices[0:args.examples] + 1.0) / 2.0
-                fake_samples = (g[0:args.examples] + 1.0) / 2.0
-                montage_summary(real_images, 'inputs')
-                montage_summary(fake_samples, 8, 8, 'fake')
-                summarize_collection('losses', scope)
-                summaries = tf.get_collection(SUMMARIES, scope)
-
-                # reuse variables in next tower
+                # reuse variables on next tower
                 tf.get_variable_scope().reuse_variables()
-                
-                # keep only one batchnorm update since one accumulates rapidly enough for both
-                batchnorm_updates = tf.get_collection(UPDATE_OPS, scope)
-                
-                # compute and collect gradients for generator and discriminator
-                # restrict optimizer to vars for each component
-                g_vars = tf.get_collection(TRAINABLE_VARIABLES, scope='generator')
-                d_vars = tf.get_collection(TRAINABLE_VARIABLES, scope='discriminator')
-                with tf.variable_scope('compute_gradients/generator'):
-                    g_tower_grads.append(g_opt.compute_gradients(g_loss, var_list=g_vars))
-                with tf.variable_scope('compute_gradients/discriminator'):
-                    d_tower_grads.append(d_opt.compute_gradients(d_loss, var_list=d_vars))
+
+                # losses
+                g_loss, d_loss = self.losses(x, g, d_fake, d_real, args)
+
+                # compute gradients
+                g_params = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, 'generator')
+                d_params = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, 'discriminator')
+                g_tower_grads.append(g_opt.compute_gradients(g_loss, var_list=g_params))
+                d_tower_grads.append(d_opt.compute_gradients(d_loss, var_list=d_params))
+
+                # only need one batchnorm update (ends up being updates for last tower)
+                batchnorm_updates = tf.get_collection(tf.GraphKeys.UPDATE_OPS, scope)
+
+                # add some summaries
+                tf.summary.histogram('fakes', g)
+                tf.summary.histogram('real', x)
+                # add montages. need to rescale images from [-1,1] to [0,1]
+                real_examples = (x[0:args.examples] + 1.0) / 2
+                fake_examples = (g[0:args.examples] + 1.0) / 2
+                montage_summary(tf.reshape(real_examples, [-1, 64, 64, 3]), 8, 8, 'inputs')
+                montage_summary(tf.reshape(fake_examples, [-1, 64, 64, 3]), 8, 8, 'fake')
 
                 
+            # average gradients back on CPU
+            g_grads = average_gradients(g_tower_grads)
+            d_grads = average_gradients(d_tower_grads)
+            summarize_gradients(g_grads + d_grads)
 
-            # training
-            with tf.variable_scope('training'):
-                with tf.variable_scope('gradients'):
-                    g_grads = average_gradients(g_tower_grads)
-                    d_grads = average_gradients(d_tower_grads)
-                    g_apply_gradient_op = g_opt.apply_gradients(g_grads, global_step=global_step)
-                    d_apply_gradient_op = d_opt.apply_gradients(d_grads, global_step=global_step)
-                    
-                # group training ops together
-                with tf.variable_scope('train_op'):
-                    with tf.control_dependencies(batchnorm_updates):
-                        self.train_disc_op = tf.group(d_apply_gradient_op)
-                        self.train_gen_op = tf.group(g_apply_gradient_op)
+            # apply gradients back on CPU
+            global_step = tf.train.get_global_step()
+            g_apply_gradient_op = g_opt.apply_gradients(g_grads, global_step=global_step)
+            d_apply_gradient_op = d_opt.apply_gradients(d_grads, global_step=global_step)
+            
+            # setup train ops
+            if args.model == 'gan':
+                with tf.control_dependencies(batchnorm_updates):
+                    self.g_train_op = tf.group(g_apply_gradient_op)
+                    self.d_train_op = tf.group(d_apply_gradient_op)
+            elif args.model == 'iwgan':
+                self.g_train_op = tf.group(g_apply_gradient_op)
+                with tf.control_dependencies(batchnorm_updates):
+                    self.d_train_op = tf.group(d_apply_gradient_op)
+            elif args.model == 'wgan':
+                # add weight clipping method
+                clip_D = [p.assign(tf.clip_by_value(p, -0.01, 0.01)) for p in d_params]
+                with tf.control_dependencies(batchnorm_updates):                
+                    with tf.control_dependencies(clip_D):
+                        self.d_train_op = tf.group(d_apply_gradient_op)
+                    self.g_train_op = tf.group(g_apply_gradient_op)
 
-            self.summary_op = tf.summary.merge(summaries)
-                    
-
-            # original wgan weight clipping method
-            # if self.wgan:
-            #     # clip weights after each optimizer update
-            #     with tf.variable_scope('clip_weights/discriminator'):
-            #         clip_D = [p.assign(tf.clip_by_value(p, -0.01, 0.01)) for p in d_vars]
-            #
-            # summaries = tf.get_collection(tf.GraphKeys.SUMMARIES, scope)
+        # grab summaries
+        summaries = tf.get_collection(tf.GraphKeys.SUMMARIES)
+        self.summary_op = tf.summary.merge(summaries)
 
 
-    
-    def build_model(self, x, args, gpu_id):
-        """Constructs the inference and loss portion of the model.
-        Returns a list of form (latent, generator, real discriminator, 
-        fake discriminator), where each is the final output node of each 
-        component. """
 
-        # latent
-        with tf.variable_scope('latent'):
-            z = self.build_latent(args.batch_size, args.latent_size)
-        # generator
-        with tf.variable_scope('generator'):
-            g = self.build_generator(z, args.latent_size, (gpu_id > 0))
-        # discriminator
-        with tf.variable_scope('discriminator') as dscope:
-            d_real = self.build_discriminator(x, (gpu_id>0), not self.wgan)
-            d_fake = self.build_discriminator(g, True, not self.wgan)
 
-            if self.wgan:
-                # calculate gradient penalty term (from `Improved Training of Wasserstein GANs`)
-                differences = g - x
-                alpha = tf.random_uniform(shape=[args.batch_size, 1, 1, 1], minval=0.0, maxval=1.0)
-                interpolates = x + alpha*differences
-                d_interpolates = self.build_discriminator(interpolates, True, not self.wgan)
-                gradients = tf.gradients(d_interpolates, [interpolates])[0]
-                slopes = tf.sqrt(tf.reduce_sum(tf.square(gradients), reduction_indices=[1]))
-                gradient_penalty = tf.reduce_mean((slopes-1.)**2)
-            else:
-                gradient_penalty = None
-        # losses
-        self.build_losses(x, g, d_real, d_fake, gradient_penalty, gpu_id, args)
         
-        return (z, g, d_real, d_fake)
+    def losses(self, x, g, d_fake, d_real, args):
+        """Add loss nodes to the graph depending on the model type.
 
-    
-    def build_losses(self, x, g, d_real, d_fake, gradient_penalty, gpu_id, args):
-        if self.wgan:
-            with tf.variable_scope('losses/generator'):
-                g_loss = tf.negative(tf.reduce_mean(d_fake), name='g_loss')
-            with tf.variable_scope('losses/discriminator'):
-                l_term = 10.0 # TODO move to args
-                d_loss = tf.identity(tf.reduce_mean(d_fake) - \
-                                         tf.reduce_mean(d_real) + \
-                                         l_term * gradient_penalty, name='d_loss')
-        else:
-            # need to maximize this, but TF only does minimization, so we use negative
-            with tf.variable_scope('losses/generator'):
-                g_loss = tf.reduce_mean(-tf.log(d_fake + 1e-8), name='g_loss')
-            with tf.variable_scope('losses/discriminator'):
-                d_loss = tf.reduce_mean(-tf.log(d_real + 1e-8) - tf.log(1 - d_fake + 1e-8), name='d_loss')
+        Args:
+          x: Tensor, real images.
+          g: Tensor, the generator.
+          d_fake: Tensor, the fake discriminator.
+          d_real: Tensor, the real discriminator.
+          args: Argparse structure.
+
+        Returns:
+          g_loss: Tensor, the generator's loss function.
+          d_loss: Tensor, the discriminator's loss function.
+        """
+        if args.model == 'gan':
+            g_loss = tf.reduce_mean(-tf.log(d_fake + 1e-8))
+            d_loss = tf.reduce_mean(-tf.log(d_real + 1e-8) - tf.log(1 - d_fake + 1e-8))
+        elif args.model == 'wgan':
+            g_loss = -tf.reduce_mean(d_fake)
+            d_loss = tf.reduce_mean(d_fake) - tf.reduce_mean(d_real)
+        elif args.model == 'iwgan':
+            l_term = 10.0
+            g_loss = -tf.reduce_mean(d_fake)
+            d_loss = tf.reduce_mean(d_fake) - tf.reduce_mean(d_real) + l_term * self.gradient_penalty(x, g, args)
         tf.add_to_collection('losses', g_loss)
         tf.add_to_collection('losses', d_loss)
-    
-            
-    def build_latent(self, batch_size, latent_size):
-        """Builds a latent node that samples from the Gaussian."""
+        tf.summary.scalar('g_loss', g_loss)
+        tf.summary.scalar('d_loss', d_loss)
+        return g_loss, d_loss
+
         
-        z = tf.random_normal([batch_size, latent_size], 0, 1)
-        activation_summary(z, montage=False)
-        # sample node (for use in visualize.py)
-        tf.identity(z, name='sample')
-        return z
+    def gradient_penalty(self, x, g, args):
+        """Calculate gradient penalty for discriminator.
+        
+        This requires creating a separate discriminator path.
+
+        Args: 
+          x: Tensor, the real images.
+          g: Tensor, the fake images.
+          args: Argparse structure.
+        """
+        alpha = tf.random_uniform(shape=[args.batch_size, 1], minval=0.0, maxval=1.0)
+        differences = g - x
+        interpolates = x + (alpha * differences)
+        d_interpolates = self.discriminator(interpolates, args, reuse=True)
+        gradients = tf.gradients(d_interpolates, [interpolates])[0]
+        slopes = tf.sqrt(tf.reduce_sum(tf.square(gradients)))
+        gradient_penalty = tf.reduce_mean((slopes-1.0)**2)
+        return gradient_penalty
+
+
+    def generator(self, args, reuse=False):
+        """Adds generator nodes to the graph.
+
+        From noise, applies deconv2d until image is scaled up to match
+        the dataset.
+        """
+        output_dim = 64*64*3
+        with tf.variable_scope('generator') as scope:
+            with arg_scope([dense, deconv2d],
+                               reuse = reuse,
+                               use_batch_norm = True,
+                               activation = tf.nn.relu,
+                               add_summaries = True):
+                z = tf.random_normal([args.batch_size, args.latent_size])
+                y = dense(z, args.latent_size, 4*4*4*args.latent_size, name='fc1')
+                y = tf.reshape(y, [-1, 4, 4, 4*args.latent_size])
+                y = deconv2d(y, 4*args.latent_size, 2*args.latent_size, 5, 2, name='dc1')
+                y = deconv2d(y, 2*args.latent_size, args.latent_size, 5, 2, name='dc2')
+                y = deconv2d(y, args.latent_size, int(args.latent_size/2), 5, 2, name='dc3')
+                y = deconv2d(y, int(args.latent_size/2), 3, 5, 2, name='dc4', activation=tf.tanh)
+                y = tf.reshape(y, [-1, output_dim])
+        return y
 
     
-    def build_generator(self, x, batch_size, reuse, use_batch_norm=True):
-        """Builds a generator with layers of size 
-           96, 256, 256, 128, 64. Output is a 64x64x3 image."""
+    def discriminator(self, x, args, reuse=False):
+        """Adds discriminator nodes to the graph.
 
-        with tf.variable_scope('fit_and_reshape', reuse=reuse):
-            x = tf.nn.relu(batch_norm(dense(x, batch_size, 32*4*4, reuse, name='d1'), center=True, scale=True, is_training=True))
-            x = tf.reshape(x, [-1, 4, 4, 32]) # un-flatten
-        with tf.variable_scope('conv1', reuse=reuse):
-            x = tf.nn.relu(batch_norm(conv2d(x, 32, 96, 1, reuse=reuse, name='c1'), center=True, scale=True, is_training=True))
-            activation_summary(x, 12, 8)
-        with tf.variable_scope('conv2', reuse=reuse):                
-            x = tf.nn.relu(batch_norm(conv2d(x, 96, 256, 1, reuse=reuse, name='c2'), center=True, scale=True, is_training=True))
-            activation_summary(x, 16, 16)
-        with tf.variable_scope('deconv1', reuse=reuse):                
-            x = tf.nn.relu(batch_norm(deconv2d(x, 256, 256, 5, 2, reuse=reuse, name='dc1'), center=True, scale=True, is_training=True))
-            activation_summary(x, 16, 16)
-        with tf.variable_scope('deconv2', reuse=reuse):                
-            x = tf.nn.relu(batch_norm(deconv2d(x, 256, 128, 5, 2, reuse=reuse, name='dc2'), center=True, scale=True, is_training=True))
-            activation_summary(x, 8, 16)
-        with tf.variable_scope('deconv3', reuse=reuse):                
-            x = tf.nn.relu(batch_norm(deconv2d(x, 128, 64, 5, 2, reuse=reuse, name='dc3'), center=True, scale=True, is_training=True))
-            activation_summary(x, 8, 8)
-        with tf.variable_scope('deconv4', reuse=reuse):
-            # 32x32
-            x = tf.nn.relu(batch_norm(conv2d(x, 64, 3, 1, reuse=reuse, name='c3'), center=True, scale=True, is_training=True))
-            # 64x64
-            # x = tf.nn.relu(batch_norm(deconv2d(x, 64, 3, 5, 2, reuse=reuse, name='dc4')))
-            activation_summary(x, montage=False)
-        with tf.variable_scope('output'):
-            x = tf.tanh(x, name='out')
-            activation_summary(x, montage=False)
-            
-        # sample node (for use in visualize.py)            
-        tf.identity(x, name='sample')
+        From the input image, successively applies convolutions with
+        striding to scale down layer sizes until we get to a single
+        output value, representing the discriminator's estimate of fake
+        vs real. The single final output acts similar to a sigmoid
+        activation function.
+
+        Args:
+          x: Tensor, input.
+          args: Argparse structure.
+          reuse: Boolean, whether to reuse variables.
+
+        Returns:
+          Final output of discriminator pipeline. 
+        """
+        use_bn = False if args.model == 'iwgan' else True
+        with tf.variable_scope('discriminator') as scope:
+            with arg_scope([conv2d],
+                               use_batch_norm = use_bn,
+                               activation = lrelu,
+                               reuse = reuse,
+                               add_summaries = True):
+                x = tf.reshape(x, [-1, 64, 64, 3])
+                x = conv2d(x, 3, args.latent_size, 5, 2, name='c1')
+                x = conv2d(x, args.latent_size, args.latent_size*2, 5, 2, name='c2')
+                x = conv2d(x, args.latent_size*2, args.latent_size*4, 5, 2, name='c3')
+                x = tf.reshape(x, [-1, 4*4*4*args.latent_size])
+                x = dense(x, 4*4*4*args.latent_size, 1, use_batch_norm=False, activation=None, name='fc2', reuse=reuse)
+                x = tf.reshape(x, [-1])
         return x
+
     
-
-    def build_discriminator(self, x, reuse, use_batch_norm=True):
-        """Builds a discriminator with layers of size
-           64, 128, 256, 256, 96. Output is logits of final layer."""
-        with tf.variable_scope('conv1', reuse=reuse):
-            x = lrelu(conv2d(x, 3, 64, 5, 2, reuse=reuse, name='c1'))
-            activation_summary(x, 8, 8)
-        with tf.variable_scope('conv2', reuse=reuse):
-            x = conv2d(x, 64, 128, 5, 2, reuse=reuse, name='c2')
-            if use_batch_norm:
-                x = batch_norm(x, center=True, scale=True, is_training=True)
-            x = lrelu(x)
-            activation_summary(x, 8, 16)
-        with tf.variable_scope('conv3', reuse=reuse):
-            x = conv2d(x, 128, 256, 5, 2, reuse=reuse, name='c3')
-            if use_batch_norm:
-                x = batch_norm(x, center=True, scale=True, is_training=True)
-            x = lrelu(x)
-            activation_summary(x, 16, 16)
-        with tf.variable_scope('conv4', reuse=reuse):
-            x = conv2d(x, 256, 256, 5, 2, reuse=reuse, name='c4')
-            if use_batch_norm:
-                x = batch_norm(x, center=True, scale=True, is_training=True)
-            x = lrelu(x)
-            activation_summary(x, 16, 16)
-        with tf.variable_scope('conv5', reuse=reuse):
-            x = conv2d(x, 256, 96, 32, 1, reuse=reuse, name='c5')
-            if use_batch_norm:
-                x = batch_norm(x, center=True, scale=True, is_training=True)
-            x = lrelu(x)
-            activation_summary(x, 12, 8)
-        with tf.variable_scope('conv6', reuse=reuse):
-            x = conv2d(x, 96, 32, 1, reuse=reuse, name='c6')
-            if use_batch_norm:
-                x = batch_norm(x, center=True, scale=True, is_training=True)
-            x = lrelu(x)
-            activation_summary(x, 8, 4)
-
-        # TODO add fully connected layer to logits 
-            
-        with tf.variable_scope('logits'):
-            logits = flatten(x, name='flat1')
-            if self.wgan:
-                out = tf.identity(logits, name='out')
-            else:
-                out = tf.nn.sigmoid(logits, name='out')
-            activation_summary(out, montage=False)
-        # sample node (for use in visualize.py)
-        tf.identity(out, name='sample')
-        return out
-
-
     def train(self, sess, args):
-        if self.wgan:
-            for i in range(args.n_disc_train):
-                sess.run(self.train_disc_op)
-            sess.run(self.train_gen_op)
-        else:
-            sess.run([self.train_disc_op, self.train_gen_op])
+        """Train the discriminator and generator.
         
+        For WGAN and IWGAN, the discriminator is trained n times ("to
+        convergence") before training the generator. 
+        """
+        if args.model == 'gan':
+            sess.run([self.d_train_op, self.g_train_op])
+        elif args.model in ['wgan', 'iwgan']:
+            for i in range(args.n_disc_train):
+                sess.run(self.d_train_op)
+            sess.run(self.g_train_op)
 

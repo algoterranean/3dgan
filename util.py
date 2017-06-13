@@ -1,4 +1,9 @@
-# stdlib/external
+"""Useful utility functions."""
+
+from __future__ import absolute_import
+from __future__ import division
+from __future__ import print_function
+
 import numpy as np
 import tensorflow as tf
 import os
@@ -8,34 +13,59 @@ import shutil
 import time
 import pickle
 import re
-# local
-# from data import Floorplans
+
 from data import TFRecordsDataset
+from ops.input import input_slice
 
 
 
-def tower_scope_range(n_gpus):
-    """
-    Iterator and scope generator for wrapping around model 
-    construction in multi-GPU environments.
+def tower_scope_range(x, n_gpus, batch_size):
+    """Scope and sliced input generator for multi-GPU environment.
+
+    This iterator can be used to wrap around model construction and will
+    generate an appropriate GPU scope and a slice of the input tensor.
+    The size
+
+    Args: 
+      x: Tensor, the input tensor to this model.  
+      n_gpus: Integer, number of GPUs available.  
+      batch_size: Integer, size of the slice to be created for this GPU 
+      from the original input tensor.
+      
+    Returns:
+      An iterator that returns a 3 tuple containing the input for this 
+      GPU, the scope, and the GPU's id.
     """
     with tf.variable_scope(tf.get_variable_scope()):
-        for i in range(n_gpus):
-            with tf.device(variables_on_cpu(i)):
-                with tf.name_scope('tower_{}'.format(i)) as scope:
-                    yield scope, i
+        for gpu_id in range(n_gpus):
+            with tf.device(variables_on_cpu(gpu_id)):
+                with tf.name_scope('tower_{}'.format(gpu_id)) as scope:
+                    yield input_slice(x, batch_size, gpu_id), scope, gpu_id
 
 
 def tensor_name(x):
-    """
-    Remove tower prefix from tensor name.
+    """Remove tower prefix from tensor name.
+
+    Args:
+      x: Tensor, a tensor scoped to a GPU tower.
+
+    Returns:
+      A string with the name of the tensor without the tower name.
     """
     return re.sub('tower_[0-9]*/', '', x.op.name)
 
 
 def variables_on_cpu(gpu_id):
-    """
-    Keeps variables on the CPU when used in tf.device().
+    """Keeps variables on the CPU when used in tf.device().
+
+    This can be passed to a `tf.device()` call to dynamically decide
+    where to put ops and tensors within that device scope.
+
+    Args:
+      gpu_id: Integer, GPU to use if CPU is not appropriate.
+
+    Returns:
+      Helper function that returns a GPU or CPU device id. 
     """
     def helper(op):
         return '/cpu:0' if op.type == 'VariableV2' else '/gpu:{}'.format(gpu_id)
@@ -43,9 +73,7 @@ def variables_on_cpu(gpu_id):
 
 
 def summarize_collection(name, scope):
-    """
-    Add a scalar summary for every tensor in a collection.
-    """
+    """Add a scalar summary for every tensor in a collection."""
     collection = tf.get_collection(name, scope)
     for x in collection:
         tf.summary.scalar(tensor_name(x), x)
@@ -53,8 +81,13 @@ def summarize_collection(name, scope):
 
 
 def average_gradients(tower_grads):
-    """
-    Average the gradients from all GPU towers.
+    """Average the gradients from all GPU towers.
+
+    Args:
+      tower_grads: List, tuples of (grad, var) values.
+
+    Returns: 
+      A list containing the averaged gradients in (grad, var) form.
     """
     average_grads = []
     for grad_and_vars in zip(*tower_grads):
@@ -80,9 +113,20 @@ def average_gradients(tower_grads):
 
 
 def init_optimizer(args):
+    """Helper function to initialize an optimizer from given arguments.
+
+    Args:
+      args: Argparse structure.
+
+    Returns:
+      An initialized optimizer.
+    """
     with tf.variable_scope('optimizers'):
         if args.optimizer == 'rmsprop':
-            return tf.train.RMSPropOptimizer(args.lr, decay=args.decay, momentum=args.momentum, centered=args.centered)
+            return tf.train.RMSPropOptimizer(args.lr,
+                                             decay = args.decay,
+                                             momentum = args.momentum,
+                                             centered = args.centered)
         elif args.optimizer == 'adadelta':
             return tf.train.AdadeltaOptimizer(args.lr)
         elif args.optimizer == 'adagrad':
@@ -94,9 +138,12 @@ def init_optimizer(args):
         elif args.optimizer == 'padagrad':
             return tf.train.ProximalAdagradOptimizer(args.lr)
         elif args.optimizer == 'momentum':            
-            return tf.train.MomentumOptimizer(args.lr, args.momentum)
+            return tf.train.MomentumOptimizer(args.lr,
+                                              args.momentum)
         elif args.optimizer == 'adam':
-            return tf.train.AdamOptimizer(args.lr, args.beta1, args.beta2)
+            return tf.train.AdamOptimizer(args.lr,
+                                          args.beta1,
+                                          args.beta2)
         elif args.optimizer == 'ftrl':
             return tf.train.FtrlOptimizer(args.lr)
 
@@ -110,17 +157,6 @@ def collection_to_dict(collection):
         d[name] = c
     return d
         
-
-# def print_progress(epoch, completed, total, loss, gl, ll, start_time):
-
-
-# def print_progress(epoch, completed, total, start_time, loss_dict):
-#     end_time = time.time()
-#     s = ""
-#     for k, v in loss_dict.items():
-#         s += '{}: {:.4f}, '.format(k, v)
-#     sys.stdout.write('\rEpoch {:03d}: {:05d}/{:05d}: {} ({:d}s)'.format(epoch, completed, total, s[:-2], int(end_time - start_time)))
-#     sys.stdout.flush()
 
 def print_progress(iterations, loss_dict, start_time):
     end_time = time.time()
@@ -136,7 +172,6 @@ def status_tracker(sess, global_step, losses, start_time):
     l, step = sess.run([losses, global_step])
     print_progress(step, l, start_time)
 
-    
 
 def get_dataset(name):
     if name == 'mnist':
@@ -249,10 +284,7 @@ def visualize_parameters():
     #     # print('\tOn {}'.format(tensor.device))
     #     # print('\tConsumers:', tensor.consumers())
         
-
     # return total_params
-    
-
         
     # for variable in tf.trainable_variables():
     #     shape = variable.get_shape()
@@ -306,21 +338,6 @@ def reload_session(dir, fn=None):
         chk_file = fn
     saver.restore(sess, chk_file)
     return sess
-
-
-# util function to convert a tensor into a valid image
-def deprocess_image(x):
-    # normalize tensor: center on 0., ensure std is 0.1
-    x -= x.mean()
-    x /= (x.std() + 1e-5)
-    x *= 0.1
-    # clip to [0, 1]
-    x += 0.5
-    x = np.clip(x, 0, 1)
-    # convert to RGB array
-    x *= 255
-    x = np.clip(x, 0, 255).astype('uint8')
-    return x
 
 
 # usage: list(chunks(some_list, chunk_size)) ==> list of lists of that size

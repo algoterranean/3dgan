@@ -17,9 +17,6 @@ from os import path
 from models.cnn import CNN
 from models.vae import VAE
 from models.gan import GAN
-from models.dcgan import DCGAN
-from models.test import Test
-from models.test2 import Test2
 from msssim import MultiScaleSSIM, tf_ssim, tf_ms_ssim
 from util import *
 
@@ -108,12 +105,12 @@ if __name__ == '__main__':
     model_args.add_argument('--latent_size', type=int, default=200,
                                 help="""Size of middle 'z' (or latent) vector to use in 
                                         autoencoder models (if supported). Default: 200.""")
-    # data settings
+    # data/pipeline settings
     data_args.add_argument('--dataset', type=lambda s: s.lower(), default='floorplans',
                                help='Name of dataset to use. Default: floorplans.')
-    # data_args.add_argument('--normalize', default=False, action='store_true',
-    #                            help="""Enables normalization of dataset images to [-0.5, 0.5].
-    #                                    Default: False.""")
+    data_args.add_argument('--resize', type=int, nargs=2, default=[0, 0],
+                               help="""Resize input images to size w x h. This argument, if 
+                                     specified, requires two values (width and height).""")
     args = parser.parse_args()
 
     
@@ -140,20 +137,13 @@ if __name__ == '__main__':
 
     # setup model
     debug('Initializing model...')
-    if args.model == 'gan':
+    if args.model in ['gan', 'wgan', 'iwgan']:
         model = GAN(x, args)
-    elif args.model == 'wgan':
-        model = GAN(x, args, wgan=True)
     elif args.model == 'vae':
         model = VAE(x, args)
     elif args.model == 'cnn':
         model = CNN(x, args)
-    elif args.model == 'dcgan':
-        model = DCGAN(x, args)
-    elif args.model == 'test':
-        model = Test(x, args)
-    elif args.model == 'test2':
-        model = Test2(x, args)
+        
     losses = collection_to_dict(tf.get_collection('losses'))
     init_op = tf.group(tf.global_variables_initializer(), tf.local_variables_initializer())
 
