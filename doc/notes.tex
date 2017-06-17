@@ -1,0 +1,65 @@
+\documentclass{article}
+\usepackage[utf8]{inputenc}
+\usepackage[english]{babel}
+\usepackage{amsthm}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{framed}
+\usepackage{calc}
+\usepackage{hyperref}
+\hypersetup{colorlinks=true,
+  citecolor = {red},
+  urlcolor = {blue}}
+\usepackage{minted}
+\usepackage{graphicx}
+\usepackage{caption}
+\usepackage{subcaption}
+\usepackage{verbatim}
+
+
+
+\usepackage{tikz}
+\usetikzlibrary{automata,positioning}
+\usepackage{float}
+
+\date{\today}
+\title{Notes}
+
+\usepackage{natbib}
+\bibliographystyle{humannat}
+
+
+\begin{document}
+
+\begin{flushleft}
+  \emph{Unsupervised Representation Learning with Deep Convolutional Generative Adversarial Networks}\\
+  Radford, Metz, and Chintala, 2015\\
+  \href{https://arxiv.org/abs/1511.06434}{https://arxiv.org/abs/1511.06434}\\
+
+  \subsection*{Architecture}
+  \begin{itemize}
+
+  \item Uses strided convolution instead of maxpooling, allowing the model to learn its own spatial downsampling.
+  \item Uses an all-convolutional net with only 2 fully connected layers (from $z$ to first convolution in generator, and from final convolution of discriminator to output).\footnote{Using global averaging pooling with fully connected layers resulted in increased model stability but hurt convergence speed.}
+  \item Last layer of discriminator is flattened to fed into a single sigmoid output.
+  \item Uses batch norm on all layers except generator output layer and discriminator input layer.\footnote{Using batchnorm everywhere resulted in sample oscillation and model instability.}
+  \item The generator uses ReLU activation everywhere with the exception of the output layer, which uses Tanh.\footnote{Using a bounded activation allowed the model to learn more quickly to saturate and cover the color space of the training distribution.}
+  \item The discriminator uses LeakyReLU activation everywhere. 
+  \end{itemize}
+
+  \subsection*{Training}
+
+  \begin{itemize}
+  \item Images were scaled to [-1, 1], the range of the Tanh activation function. Otherwise no pre-processing was done.
+  \item Trained with minibatch SGD with a mini-batch size of 128.
+  \item Weights were initialized from a Normal distrbution with mean 0 and variance 0.02.
+  \item The slope of the leak for LeakyReLU was set to 0.2 in all models.
+  \item Uses Adam optimizer with $\alpha = 0.0002$ and $\beta_1 = 0.5$.
+  \end{itemize}
+  
+\end{flushleft}
+
+
+
+%% Source: \cite{radford2015unsupervised}
+\end{document}
