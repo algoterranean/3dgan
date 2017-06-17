@@ -23,10 +23,9 @@ def generate_dataset(name, filename):
     for line in tqdm(lines):
         fn = os.path.join(image_dir, line.strip())
         img = cv2.imread(fn, cv2.IMREAD_COLOR)
+        img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
         img = cv2.resize(img, (64, 64))
-
-        # img = np.divide(img.astype(np.float32), 255.0)
-    
+        
         img_string = img.tostring()
         if len(img_string) != 12288:
             print('Bad image!', fn)
@@ -41,10 +40,3 @@ generate_dataset('train', 'train_set.txt')
 generate_dataset('test', 'test_set.txt')
 generate_dataset('validate', 'validation_set.txt')
 
-# train_set.txt
-# validation_set.txt
-# test_set.txt
-
-# -rw-r--r-- 1 pls pls 1590697758 May  2 07:05 floorplans.64.test.tfrecords
-# -rw-r--r-- 1 pls pls 1988366016 May  2 07:01 floorplans.64.train.tfrecords
-# -rw-r--r-- 1 pls pls  397668258 May  1 21:24 floorplans.64.validation.tfrecords

@@ -2,6 +2,7 @@
 .*.py
 *__pycache__*
 *.png
+*.pyc
 ._*
 .DS_Store
 runs/

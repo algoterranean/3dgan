@@ -1,173 +1,299 @@
-"""Implementation of variational auto-encoder."""
+"""Implementation of variational autoencoder.
+
+Sources:
+-------
+- Auto-Encoding Variational Bayes
+https://arxiv.org/abs/1312.6114
+"""
 
 from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
 import tensorflow as tf
-import numpy as np
-import time
-import math
-import re
-from sys import stdout
+from tensorflow.contrib.framework.python.ops.arg_scope import arg_scope
+from math import sqrt
 
-from util import print_progress, fold, average_gradients, init_optimizer, variables_on_cpu, summarize_collection
+from util import tower_scope_range, average_gradients, init_optimizer, default_to_cpu, merge_all_summaries, default_training
 from ops.layers import dense, conv2d, deconv2d, flatten
-from ops.summaries import montage_summary, activation_summary
-from ops.input import input_slice
+from ops.summaries import montage_summary, summarize_gradients
 from ops.activations import lrelu
-from model import Model
 
 
 
-class VAE(Model):
-    """Implementation of variational autoencoder.
+@default_to_cpu
+def vae(x, args):
+    opt = init_optimizer(args)
+    tower_grads = []
 
-    Sources:
-    -------
-    - Auto-Encoding Variational Bayes
-    https://arxiv.org/abs/1312.6114
-    """
-    
-    def __init__(self, x, args):
-        
-        with tf.device('/cpu:0'):
-            opt = init_optimizer(args)
-            tower_grads = []
-
-            with tf.variable_scope('model') as scope:
-                for gpu_id in range(args.n_gpus):
-                    with tf.device(variables_on_cpu(gpu_id)):
-                        with tf.name_scope('tower_{}'.format(gpu_id)) as scope:
-                            # get slice for this GPU
-                            x_slice = input_slice(x, args.batch_size, gpu_id)
-                            # model
-                            encoder, z, z_mean, z_stddev, decoder_real, decoder_fake = self.build_model(x_slice, args, gpu_id)
-                            # loss
-                            g_loss, l_loss, d_loss = summarize_collection('losses', scope)
-                            # reuse variables in next tower
-                            tf.get_variable_scope().reuse_variables()
-                            # add summaries for examples and samples
-                            ne = int(math.sqrt(args.examples))
-                            montage_summary(x_slice[0:args.examples], name='examples/inputs')
-                            montage_summary(decoder_real[0:args.examples], ne, ne, name='examples/real')
-                            montage_summary(decoder_fake[0:args.examples], ne, ne, name='examples/fake')
-                            # compute and collect gradients for generator and discriminator
-                            with tf.variable_scope('compute_gradients'):
-                                tower_grads.append(opt.compute_gradients(d_loss))
-                            
-
-            # back on the CPU
-            with tf.variable_scope('training'):
-                avg_grads, apply_grads, self.train_op = self.average_and_apply_grads(tower_grads, opt)
-                self.summarize_grads(avg_grads)
-            # combine summaries
-            self.summary_op = tf.summary.merge(tf.get_collection(tf.GraphKeys.SUMMARIES, scope))
-                                                   
-
-    def build_model(self, x, args, gpu_id):
-        # encoder
+    for x, scope, gpu_id in tower_scope_range(x, args.n_gpus, args.batch_size):
+        # model
         with tf.variable_scope('encoder'):
-            encoder = self.build_encoder(x, reuse=(gpu_id>0))
-        # latent
+            e = encoder(x, reuse=(gpu_id>0))
         with tf.variable_scope('latent'):
-            samples, z, z_mean, z_stddev = self.build_latent(encoder, args.batch_size, args.latent_size, reuse=(gpu_id>0))
-        # decoder
-        with tf.variable_scope('decoder') as dscope:
-            decoder_real = self.build_decoder(z, args.latent_size, reuse=(gpu_id>0))
-            decoder_fake = self.build_decoder(samples, args.latent_size, reuse=True)
+            samples, z, z_mean, z_stddev = latent(e, args.batch_size, args.latent_size, reuse=(gpu_id>0))
+        with tf.variable_scope('decoder'):
+            d_real = decoder(z, args.latent_size, reuse=(gpu_id>0))
+            d_fake = decoder(samples, args.latent_size, reuse=True)
         # losses
-        self.build_losses(x, z_mean, z_stddev, decoder_real)
-        return (encoder, z, z_mean, z_stddev, decoder_real, decoder_fake)
+        d_loss, l_loss, t_loss = losses(x, z_mean, z_stddev, d_real)
+        # summaries
+        summaries(x, d_fake, d_real, args)
+        # gradients
+        tower_grads.append(opt.compute_gradients(d_loss))
+
+    # training
+    avg_grads = average_gradients(tower_grads)
+    summarize_gradients(avg_grads)
+    train_op = opt.apply_gradients(avg_grads, global_step=tf.train.get_global_step())
+
+    return default_training(train_op), merge_all_summaries()
+
+
+
+def summaries(x, d_fake, d_real, args):
+    """Add montage summaries for examples and samples."""
+    ne = int(sqrt(args.examples))
+    montage_summary(x[0:args.examples], name='examples/inputs')
+    montage_summary(d_real[0:args.examples], ne, ne, name='examples/real_decoded')
+    montage_summary(d_fake[0:args.examples], ne, ne, name='examples/fake_decoded')
 
     
-    def build_losses(self, x, z_mean, z_stddev, decoder):
-        with tf.variable_scope('losses/decoder'):
-            exp = x * tf.log(1e-8 + decoder) + (1 - x) * tf.log(1e-8 + (1 - decoder))
-            d_loss = tf.negative(tf.reduce_sum(exp), name='decoder_loss')
-        with tf.variable_scope('losses/latent'):
-            # reparam trick
-            exp = tf.square(z_mean) + tf.square(z_stddev) - tf.log(1e-8 + tf.square(z_stddev)) - 1
-            l_loss = tf.multiply(0.5, tf.reduce_sum(exp), name='latent_loss')
-        with tf.variable_scope('losses/total'):
-            t_loss = tf.reduce_mean(d_loss + l_loss, name='total_loss')
-        for l in [d_loss, l_loss, t_loss]:
-            tf.add_to_collection('losses', l)
-        
-        
-    def build_encoder(self, x, reuse=False):
-        """Input: 64x64x3. Output: 4x4x32.
-        Layer sizes = 64, 128, 256, 256, 96, 32."""
+def losses(x, z_mean, z_stddev, d_real):
+    """Adds loss nodes to the graph.
 
-        with tf.variable_scope('conv1'):
-            x = lrelu(conv2d(x, 3, 64, 5, 2, reuse=reuse, name='c1'))
-            activation_summary(x, 8, 8)
-        with tf.variable_scope('conv2'):
-            x = lrelu(conv2d(x, 64, 128, 5, 2, reuse=reuse, name='c2'))
-            activation_summary(x, 8, 16)
-        with tf.variable_scope('conv3'):
-            x = lrelu(conv2d(x, 128, 256, 5, 2, reuse=reuse, name='c3'))
-            activation_summary(x, 16, 16)
-        with tf.variable_scope('conv4'):
-            x = lrelu(conv2d(x, 256, 256, 5, 2, reuse=reuse, name='c4'))
-            activation_summary(x, 16, 16)
-        with tf.variable_scope('conv5'):
-            x = lrelu(conv2d(x, 256, 96, 1, reuse=reuse, name='c5'))
-            activation_summary(x, 12, 8)
-        with tf.variable_scope('conv6'):
-            x = lrelu(conv2d(x, 96, 32, 1, reuse=reuse, name='c6'))
-            activation_summary(x, 8, 4)
-        tf.identity(x, name='sample')
-        return x
+    Args:
+      x: Tensor, real input images.
+      z_mean: Tensor, latent's mean vector. 
+      z_stddev: Tensor, latent's stddev vector.
+      d_real: Tensor, output of decoder with real inputs.
+    """
+    # decoder loss
+    exp = x * tf.log(1e-8 + d_real) + (1 - x) * tf.log(1e-8 + (1 - d_real))
+    d_loss = tf.negative(tf.reduce_sum(exp), name='decoder_loss')
+    
+    # latent loss (using reparam trick)
+    exp = tf.square(z_mean) + tf.square(z_stddev) - tf.log(1e-8 + tf.square(z_stddev)) - 1
+    l_loss = tf.multiply(0.5, tf.reduce_sum(exp), name='latent_loss')
+    # total loss
+    t_loss = tf.reduce_mean(d_loss + l_loss, name='total_loss')
+    # summaries
+    for l in [d_loss, l_loss, t_loss]:
+        tf.add_to_collection('losses', l)
+    tf.summary.scalar('d_loss', d_loss)
+    tf.summary.scalar('l_loss', l_loss)
+    tf.summary.scalar('t_loss', t_loss)
+    return d_loss, l_loss, t_loss
 
     
-    def build_latent(self, x, batch_size, latent_size, reuse=False):
-        """Input: 4x4x32. Output: 200."""
-        
-        with tf.variable_scope('flatten'):
-            flat = flatten(x)
-        with tf.variable_scope('mean'):
-            z_mean = dense(flat, 32*4*4, latent_size, reuse=reuse, name='d1')
-            activation_summary(z_mean, montage=False)
-        with tf.variable_scope('stddev'):
-            z_stddev = dense(flat, 32*4*4, latent_size, reuse=reuse, name='d2')
-            activation_summary(z_stddev, montage=False)
-        with tf.variable_scope('gaussian'):
-            samples = tf.random_normal([batch_size, latent_size], 0, 1, dtype=tf.float32)
-            activation_summary(samples, montage=False)
-            z = (z_mean + (z_stddev * samples))
-            activation_summary(z, montage=False)
-        tf.identity(z, name='sample')
-        return (samples, z, z_mean, z_stddev)
+def encoder(x, reuse=False):
+    """Adds encoder nodes to the graph.
+
+    Args:
+      x: Tensor, input images.
+      reuse: Boolean, whether to reuse variables.
+    """
+    with arg_scope([conv2d],
+                       reuse = reuse,
+                       activation = lrelu,
+                       use_batch_norm = True,
+                       add_summaries = True):
+        x = conv2d(x, 3, 64, 5, 2, name='c1')
+        x = conv2d(x, 64, 128, 5, 2, name='c2')
+        x = conv2d(x, 128, 256, 5, 2, name='c3')
+        x = conv2d(x, 256, 256, 5, 2, name='c4')
+        x = conv2d(x, 256, 96, 1, name='c5')
+        x = conv2d(x, 96, 32, 1, name='c6') #, activation=tf.nn.sigmoid)
+    return x
+
+
+def latent(x, batch_size, latent_size, reuse=False):
+    """Adds latent nodes for sampling and reparamaterization.
+
+    Args:
+    x: Tensor, input images.
+    batch_size: Integer, batch size.
+    latent_size: Integer, size of latent vector.
+    reuse: Boolean, whether to reuse variables.
+    """
+    with arg_scope([dense],
+                       reuse = reuse):
+        flat = flatten(x)
+        z_mean = dense(flat, 32*4*4, latent_size, name='d1')
+        z_stddev = dense(flat, 32*4*4, latent_size, name='d2')
+        samples = tf.random_normal([batch_size, latent_size], 0, 1)
+        z = (z_mean + (z_stddev * samples))
+    return (samples, z, z_mean, z_stddev)
+
+
+def decoder(x, latent_size, reuse=False):
+    """Adds decoder nodes to the graph.
+
+    Args:
+    x: Tensor, encoded image representation.
+    latent_size: Integer, size of latent vector.
+    reuse: Boolean, whether to reuse variables.
+    """
+    with arg_scope([dense, conv2d, deconv2d],
+                       activation = tf.nn.relu,
+                       reuse = reuse,
+                       add_summaries = True):
+        x = dense(x, latent_size, 32*4*4, name='d1')
+        x = tf.reshape(x, [-1, 4, 4, 32])
+        x = conv2d(x, 32, 96, 1, name='c1')
+        x = conv2d(x, 96, 256, 1, name='c2')
+        x = deconv2d(x, 256, 256, 5, 2, name='dc1')
+        x = deconv2d(x, 256, 128, 5, 2, name='dc2')
+        x = deconv2d(x, 128, 64, 5, 2, name='dc3')
+        x = deconv2d(x, 64, 3, 5, 2, name='dc4', activation=tf.nn.sigmoid)
+    return x
+
+
+
+# class vae:
+#     """Implementation of variational autoencoder.
+
+#     Sources:
+#     -------
+#     - Auto-Encoding Variational Bayes
+#     https://arxiv.org/abs/1312.6114
+#     """
+
+#     def __init__(self, x, args):
+#         """Initialize model.
+
+#         Args:
+#           x: Tensor, input images. 
+#           args: Argparse struct.
+#         """
+#         with tf.device('/cpu:0'):
+#             opt = init_optimizer(args)
+#             tower_grads = []
+
+#             for x, scope, gpu_id in tower_scope_range(x, args.n_gpus, args.batch_size):
+#                 # instantiate model on this GPU
+#                 e = self.encoder(x, reuse=(gpu_id>0))
+#                 samples, z, z_mean, z_stddev = self.latent(e, args.batch_size, args.latent_size, reuse=(gpu_id>0))
+#                 d_fake = self.decoder(samples, args.latent_size, reuse=(gpu_id>0))
+#                 d_real = self.decoder(z, args.latent_size, reuse=True)
+#                 # losses
+#                 g_loss, l_loss, d_loss = self.losses(x, z_mean, z_stddev, d_real)
+
+#                 # reuse variables in next tower
+#                 tf.get_variable_scope().reuse_variables()
+                
+#                 # add summaries for examples and samples
+#                 ne = int(sqrt(args.examples))
+#                 montage_summary(x[0:args.examples], name='examples/inputs')
+#                 montage_summary(d_real[0:args.examples], ne, ne, name='examples/real_decoded')
+#                 montage_summary(d_fake[0:args.examples], ne, ne, name='examples/fake_decoded')
+                
+#                 # compute and collect gradients for generator and discriminator
+#                 tower_grads.append(opt.compute_gradients(d_loss))
+
+#             # back on the CPU
+#             avg_grads = average_gradients(tower_grad)
+#             summarize_gradients(avg_grads)
+#             global_step = tf.train.get_global_step()
+#             apply_grads = opt.apply_gradients(avg_grads, global_step=global_step)
+#             self.train_op = tf.group(apply_grads)
+                
+#             # graab summaries
+#             summaries = tf.get_collection(tf.GraphKeys.SUMMARIES)
+#             self.summary_op = tf.summary.merge(summaries)
 
     
-    def build_decoder(self, x, latent_size, reuse=False):
-        """Input: 200. Output: 64x64x3.
-        Layer sizes = 96, 256, 256, 128, 64"""
+#     def losses(self, x, z_mean, z_stddev, d_real):
+#         """Adds loss nodes to the graph.
+
+#         Args:
+#           x: Tensor, real input images.
+#           z_mean: Tensor, latent's mean vector. 
+#           z_stddev: Tensor, latent's stddev vector.
+#           d_real: Tensor, output of decoder with real inputs.
+#         """
+#         # decoder loss
+#         exp = x * tf.log(1e-8 + d_real) + (1 - x) * tf.log(1e-8 + (1 - d_real))
+#         d_loss = tf.negative(tf.reduce_sum(exp), name='decoder_loss')
+#         # latent loss (using reparam trick)
+#         exp = tf.square(z_mean) + tf.square(z_stddev) - tf.log(1e-8 + tf.square(z_stddev)) - 1
+#         l_loss = tf.multiply(0.5, tf.reduce_sum(exp), name='latent_loss')
+#         # total loss
+#         t_loss = tf.reduce_mean(d_loss + l_loss, name='total_loss')
+#         # summaries
+#         tf.add_to_collection('losses', d_loss)
+#         tf.add_to_collection('losses', l_loss)
+#         tf.add_to_collection('losses', t_loss)
+#         tf.summary.scalar('d_loss', d_loss)
+#         tf.summary.scalar('l_loss', l_loss)
+#         tf.summary.scalar('t_loss', t_loss)
+
         
-        with tf.variable_scope('dense'):
-            x = dense(x, latent_size, 32*4*4, reuse=reuse, name='d1')
-            activation_summary(x, montage=False)
-        with tf.variable_scope('conv1'):
-            x = tf.reshape(x, [-1, 4, 4, 32]) # un-flatten
-            x = tf.nn.relu(conv2d(x, 32, 96, 1, reuse=reuse, name='c1'))
-            activation_summary(x, 12, 8)
-        with tf.variable_scope('conv2'):
-            x = tf.nn.relu(conv2d(x, 96, 256, 1, reuse=reuse, name='c2'))
-            activation_summary(x, 16, 16)
-        with tf.variable_scope('deconv1'):
-            x = tf.nn.relu(deconv2d(x, 256, 256, 5, 2, reuse=reuse, name='dc1'))
-            activation_summary(x, 16, 16)
-        with tf.variable_scope('deconv2'):
-            x = tf.nn.relu(deconv2d(x, 256, 128, 5, 2, reuse=reuse, name='dc2'))
-            activation_summary(x, 8, 16)
-        with tf.variable_scope('deconv3'):
-            x = tf.nn.relu(deconv2d(x, 128, 64, 5, 2, reuse=reuse, name='dc3'))
-            activation_summary(x, 8, 8)
-        with tf.variable_scope('deconv4'):
-            x = tf.nn.sigmoid(deconv2d(x, 64, 3, 5, 2, reuse=reuse, name='dc4'))
-            activation_summary(x, montage=False)
-        tf.identity(x, name='sample')
-        return x
+#     def encoder(self, x, reuse=False):
+#         """Adds encoder nodes to the graph.
+
+#         Args:
+#           x: Tensor, input images.
+#           reuse: Boolean, whether to reuse variables.
+#         """
+#         with arg_scope([conv2d],
+#                            reuse = reuse,
+#                            activation = lrelu,
+#                            add_summaries = True):
+#             x = conv2d(x, 3, 64, 5, 2, name='c1')
+#             x = conv2d(x, 64, 128, 5, 2, name='c2')
+#             x = conv2d(x, 128, 256, 5, 2, name='c3')
+#             x = conv2d(x, 256, 256, 5, 2, name='c4')
+#             x = conv2d(x, 256, 96, 1, name='c5')
+#             x = conv2d(x, 96, 32, 1, name='c6')
+#         return x
+
+    
+#     def latent(self, x, batch_size, latent_size, reuse=False):
+#         """Adds latent nodes for sampling and reparamaterization.
+
+#         Args:
+#           x: Tensor, input images.
+#           batch_size: Integer, batch size.
+#           latent_size: Integer, size of latent vector.
+#           reuse: Boolean, whether to reuse variables.
+#         """
+#         with arg_scope([dense],
+#                            reuse = reuse):
+#             flat = flatten(x)
+#             z_mean = dense(flat, 32*4*4, latent_size, name='d1')
+#             z_stddev = dense(flat, 32*4*4, latent_size, name='d2')
+#             samples = tf.random_normal([batch_size, latent_size], 0, 1)
+#             z = (z_mean + (z_stddev * samples))
+#             return (samples, z, z_mean, z_stddev)
+
+        
+#     def decoder(self, x, latent_size, reuse=False):
+#         """Adds decoder nodes to the graph.
+
+#         Args:
+#           x: Tensor, encoded image representation.
+#           latent_size: Integer, size of latent vector.
+#           reuse: Boolean, whether to reuse variables.
+#         """
+#         with arg_scope([dense, conv2d],
+#                            activation = tf.nn.relu,
+#                            use_batch_norm = False,
+#                            reuse = reeuse,
+#                            add_summaries = True):
+#             x = dense(x, latent_size, 32*4*4, name='d1')
+#             x = tf.reshape(x, [-1, 4, 4, 32])
+#             x = conv2d(x, 32, 96, 1, name='c1')
+#             x = conv2d(x, 96, 256, 1, name='c2')
+#             x = deconv2d(x, 256, 256, 5, 2, name='dc1')
+#             x = deconv2d(x, 256, 128, 5, 2, name='dc2')
+#             x = deconv2d(x, 128, 64, 5, 2, name='dc3')
+#             x = deconv2d(x, 64, 3, 5, 2, activation=tf.nn.relu, name='dc4')
+#         return x
+
+    
+#     def train(self, sess, args):
+#         sess.run(self.train_op)
+
 
 

@@ -5,122 +5,226 @@ from __future__ import division
 from __future__ import print_function
 
 import tensorflow as tf
+from tensorflow.contrib.framework.python.ops.arg_scope import arg_scope
+from math import sqrt
 
-from util import average_gradients, init_optimizer
-from model import Model
+from util import tower_scope_range, average_gradients, init_optimizer, default_to_cpu, merge_all_summaries, default_training
 from ops.layers import dense, conv2d, deconv2d, flatten
-from ops.summaries import montage_summary, activation_summary
-from ops.input import input_slice
+from ops.summaries import montage_summary, summarize_gradients
 from ops.activations import lrelu
 
 
 # TODO: build decoder from same weights as encoder
 
-class CNN(Model):
-    def __init__(self, x, args):
-        with tf.device('/cpu:0'):
-            opt = init_optimizer(args)
-            tower_grads = []
+@default_to_cpu
+def cnn(x, args):
+    """Initialize a standard convolutional autoencoder.
 
-            with tf.variable_scope('model') as scope:
-                for gpu_id in range(args.n_gpus):
-                    with tf.device(self.variables_on_cpu(gpu_id)):
-                        with tf.name_scope('tower_{}'.format(gpu_id)) as scope:
-                            # input
-                            x_slice = input_slice(x, args.batch_size, gpu_id)
-                            # model
-                            encoder, latent, decoder = self.build_model(x_slice, args, gpu_id)
-                            # loss
-                            loss = self.summarize_collection('losses', scope)[0]
-                            # reuse variables on next tower
-                            tf.get_variable_scope().reuse_variables()
-                            # add montage summaries
-                            montage_summary(x_slice, 8, 8, 'inputs')
-                            montage_summary(decoder, 8, 8, 'outputs')
-                            # compute gradients on this GPU
-                            with tf.variable_scope('compute_gradients'):
-                                tower_grads.append(opt.compute_gradients(loss))
-            # back on the CPU
-            with tf.variable_scope('training'):
-                avg_grads, apply_grads, self.train_op = self.average_and_apply_grads(tower_grads, opt)
-                self.summarize_grads(avg_grads)
-                
-            # combine summaries
-            self.summary_op = tf.summary.merge(tf.get_collection(tf.GraphKeys.SUMMARIES, scope))
+    Args:
+      x: Tensor, input tensor representing the images.
+      args: Argparse struct. 
+    """
+    opt = init_optimizer(args)
+    tower_grads = []
 
-
-    def build_encoder(self, x, reuse=False):
-        """Input: 64x64x3. Output: 4x4x32.
-        Layer sizes = 64, 128, 256, 256, 96, 32"""
-        
-        with tf.variable_scope('conv1'):
-            x = lrelu(conv2d(x, 3, 64, 5, 2, reuse=reuse, name='c1'))
-            activation_summary(x, 8, 8)
-        with tf.variable_scope('conv2'):
-            x = lrelu(conv2d(x, 64, 128, 5, 2, reuse=reuse, name='c2'))
-            activation_summary(x, 8, 16)
-        with tf.variable_scope('conv3'):
-            x = lrelu(conv2d(x, 128, 256, 5, 2, reuse=reuse, name='c3'))
-            activation_summary(x, 16, 16)
-        with tf.variable_scope('conv4'):
-            x = lrelu(conv2d(x, 256, 256, 5, 2, reuse=reuse, name='c4'))
-            activation_summary(x, 16, 16)
-        with tf.variable_scope('conv5'):
-            x = lrelu(conv2d(x, 256, 96, 1, reuse=reuse, name='c5'))
-            activation_summary(x, 12, 8)
-        with tf.variable_scope('conv6'):
-            x = lrelu(conv2d(x, 96, 32, 1, reuse=reuse, name='c6'))
-            activation_summary(x, 8, 4)
-        tf.identity(x, name='sample')
-        return x
-
-    def build_decoder(self, x, latent_size, reuse=False):
-        """Input: 200. Output: 64x64x3.
-        Layer sizes = 96, 256, 256, 128, 64"""
-
-        with tf.variable_scope('dense'):
-            x = dense(x, latent_size, 32*4*4, reuse=reuse, name='d1')
-            activation_summary(x, montage=False)
-        with tf.variable_scope('conv1'):
-            x = tf.reshape(x, [-1, 4, 4, 32]) # un-flatten
-            x = tf.nn.relu(conv2d(x, 32, 96, 1, reuse=reuse, name='c1'))
-            activation_summary(x, 8, 4)
-        with tf.variable_scope('conv2'):
-            x = tf.nn.relu(conv2d(x, 96, 256, 1, reuse=reuse, name='c2'))
-            activation_summary(x, 16, 16)
-        with tf.variable_scope('deconv1'):
-            x = tf.nn.relu(deconv2d(x, 256, 256, 5, 2, reuse=reuse, name='dc1'))
-            activation_summary(x, 16, 16)
-        with tf.variable_scope('deconv2'):
-            x = tf.nn.relu(deconv2d(x, 256, 128, 5, 2, reuse=reuse, name='dc2'))
-            activation_summary(x, 8, 16)
-        with tf.variable_scope('deconv3'):
-            x = tf.nn.relu(deconv2d(x, 128, 64, 5, 2, reuse=reuse, name='dc3'))
-            activation_summary(x, 8, 8)
-        with tf.variable_scope('deconv4'):
-            x = tf.nn.sigmoid(deconv2d(x, 64, 3, 5, 2, reuse=reuse, name='dc4'))
-            activation_summary(x, montage=False)
-        tf.identity(x, name='sample')
-        return x
-
-
-    def build_latent(self, x, latent_size, reuse=False):
-        with tf.variable_scope('flatten'):
-            flat = flatten(x)
-        with tf.variable_scope('dense'):
-            x = dense(flat, 32*4*4, latent_size, reuse=reuse, name='d1')
-            self.activation_summary(x)
-        return x
-    
-
-    def build_model(self, x, args, gpu_id):
+    for x, scope, gpu_id in tower_scope_range(x, args.n_gpus, args.batch_size):
+        # create model
         with tf.variable_scope('encoder'):
-            encoder = self.build_encoder(x, (gpu_id > 0))
+            e = encoder(x, reuse=(gpu_id > 0))
         with tf.variable_scope('latent'):
-            latent = self.build_latent(encoder, args.latent_size, (gpu_id > 0))
+            z = latent(e, args.latent_size, reuse=(gpu_id > 0))
         with tf.variable_scope('decoder'):
-            decoder = self.build_decoder(latent, args.latent_size, (gpu_id > 0))
-        with tf.variable_scope('losses'):
-            loss = tf.reduce_mean(tf.abs(x - decoder), name='loss')
-        tf.add_to_collection('losses', loss)
-        return (encoder, latent, decoder)
+            d = decoder(z, args.latent_size, reuse=(gpu_id > 0))
+        d_loss = loss(x, d)
+        # add montage summaries
+        summaries(x, d, args)
+        # compute gradients
+        tower_grads.append(opt.compute_gradients(d_loss))
+                    
+    # training
+    avg_grads = average_gradients(tower_grads)
+    summarize_gradients(avg_grads)
+    train_op = opt.apply_gradients(avg_grads, global_step=tf.train.get_global_step())
+
+    return default_training(train_op), merge_all_summaries()
+
+
+
+def summaries(x, d, args):
+    ne = int(sqrt(args.examples))
+    montage_summary(x[0:args.examples], ne, ne, 'examples/inputs')
+    montage_summary(d[0:args.examples], ne, ne, 'examples/outputs')
+
+
+def loss(x, d):
+    """Add l1-loss nodes to the graph."""
+    y = tf.reduce_mean(tf.abs(x - d), name='loss')
+    tf.add_to_collection('losses', y)
+    tf.summary.scalar('loss', y)
+    tf.summary.histogram('loss', y)
+    return y
+
+
+def latent(x, latent_size, reuse=False):
+    """Add latant nodes to the graph.
+
+    Args:
+    x: Tensor, output from encoder.
+    latent_size: Integer, size of latent vector.
+    reuse: Boolean, whether to reuse variables.
+    """
+    with arg_scope([dense], reuse = reuse):
+        x = flatten(x)
+        x = dense(x, 32*4*4, latent_size, name='d1')
+    return x
+            
+
+def encoder(x, reuse=False):
+    """Adds encoder nodes to the graph.
+
+    Args:
+      x: Tensor, input images.
+      reuse: Boolean, whether to reuse variables.
+    """
+    with arg_scope([conv2d],
+                       reuse = reuse,
+                       activation = lrelu,
+                       add_summaries = True):
+        x = conv2d(x,   3,  64, 5, 2, name='c1')
+        x = conv2d(x,  64, 128, 5, 2, name='c2')
+        x = conv2d(x, 128, 256, 5, 2, name='c3')
+        x = conv2d(x, 256, 256, 5, 2, name='c4')
+        x = conv2d(x, 256,  96, 1,    name='c5')
+        x = conv2d(x,  96,  32, 1,    name='c6')
+    return x
+
+
+def decoder(x, latent_size, reuse=False):
+    """Adds decoder nodes to the graph.
+
+    Args:
+      x: Tensor, encoded image representation.
+      latent_size: Integer, size of latent vector.
+      reuse: Boolean, whether to reuse variables.
+    """
+    with arg_scope([dense, conv2d, deconv2d],
+                       reuse = reuse,
+                       add_summaries = True,
+                       activation = tf.nn.relu):
+        x = dense(x, latent_size, 32*4*4, name='d1')
+        x = tf.reshape(x, [-1, 4, 4, 32]) # un-flatten
+        x = conv2d(x,    32,  96, 1,    name='c1')
+        x = conv2d(x,    96, 256, 1,    name='c2')
+        x = deconv2d(x, 256, 256, 5, 2, name='dc1')
+        x = deconv2d(x, 256, 128, 5, 2, name='dc2')
+        x = deconv2d(x, 128,  64, 5, 2, name='dc3')
+        x = deconv2d(x,  64,   3, 5, 2, name='dc4', activation=tf.nn.sigmoid)
+    return x
+
+
+
+
+# class cnn:
+#     """Implementation of standard convolutional auto-encoder."""
+    
+#     def __init__(self, x, args):
+#         """Initialize model."""
+#         with tf.device('/cpu:0'):
+#             opt = init_optimizer(args)
+#             tower_grads = []
+
+#             for x, scope, gpu_id in tower_scope_range(x, args.n_gpus, args.batch_size):
+#                 # model
+#                 e = self.encoder(x, (gpu_id > 0))
+#                 z = self.latent(e, args.latent_size, (gpu_id > 0))
+#                 d = self.decoder(z, args.latent_size, (gpu_id > 0))
+#                 loss = self.loss(x, d)
+                
+#                 # reuse variables on next tower
+#                 tf.get_variable_scope().reuse_variables()
+                
+#                 # add montage summaries
+#                 montage_summary(x, 8, 8, 'inputs')
+#                 montage_summary(d, 8, 8, 'outputs')
+                
+#                 # compute gradients on this GPU
+#                 tower_grads.append(opt.compute_gradients(loss))
+                    
+#             # back on the CPU
+#             avg_grads = average_gradients(tower_grads)
+#             summarize_gradients(avg_grads)
+#             global_step = tf.train.get_global_step()
+#             apply_grads = opt.apply_gradients(avg_grads, global_step=global_step)            
+#             self.train_op = tf.group(apply_grads)
+
+#             # grab summaries
+#             summaries = tf.get_collection(tf.GraphKeys.SUMMARIES)
+#             self.summary_op = tf.summary.merge(summaries)
+
+            
+#     def loss(self, x, d):
+#         loss = tf.reduce_mean(tf.abs(x - d), name='loss')
+#         tf.add_to_collectionn('losses', loss)
+#         tf.summary.scalar('loss', loss)
+#         tf.summary.histogram('loss', loss)
+#         return loss
+
+
+#     def latent(self, x, latent_size, reuse=False):
+#         """Add latant nodes to the graph.
+
+#         Args:
+#           x: Tensor, output from encoder.
+#           latent_size: Integer, size of latent vector.
+#           reuse: Boolean, whether to reuse variables.
+#         """
+#         with arg_scope([dense], reuse = reuse):
+#             x = flatten(x)
+#             x = dense(x, 32*4*4, latent_size, name='d1')
+#         return x
+            
+
+#     def encoder(self, x, reuse=False):
+#         """Adds encoder nodes to the graph.
+
+#         Args:
+#           x: Tensor, input images.
+#           reuse: Boolean, whether to reuse variables.
+#         """
+#         with arg_scope([conv2d],
+#                            reuse = reuse,
+#                            activation = lrelu,
+#                            add_summaries = True):
+#             x = conv2d(x,   3,  64, 5, 2, name='c1')
+#             x = conv2d(x,  64, 128, 5, 2, name='c2')
+#             x = conv2d(x, 128, 256, 5, 2, name='c3')
+#             x = conv2d(x, 256, 256, 5, 2, name='c4')
+#             x = conv2d(x, 256,  96, 1,    name='c5')
+#             x = conv2d(x,  96,  32, 1,    name='c6')
+#         return x
+
+#     def decoder(self, x, latent_size, reuse=False):
+#         """Adds decoder nodes to the graph.
+
+#         Args:
+#           x: Tensor, encoded image representation.
+#           latent_size: Integer, size of latent vector.
+#           reuse: Boolean, whether to reuse variables.
+#         """
+#         with arg_scope([dense, conv2d, deconv2d],
+#                            reuse = reuse,
+#                            add_summaries = True,
+#                            activation = tf.nn.relu):
+#             x = dense(x, latent_size, 32*4*4, name='d1')
+#             x = tf.reshape(x, [-1, 4, 4, 32]) # un-flatten
+#             x = conv2d(x,    32,  96, 1,    name='c1')
+#             x = conv2d(x,    96, 256, 1,    name='c2')
+#             x = deconv2d(x, 256, 256, 5, 2, name='dc1')
+#             x = deconv2d(x, 256, 128, 5, 2, name='dc2')
+#             x = deconv2d(x, 128,  64, 5, 2, name='dc3')
+#             x = deconv2d(x,  64,   3, 5, 2, name='dc4', activation=tf.nn.sigmoid)
+#         return x
+
+
+#     def train(self, sess, args):
+#         sess.run(self.train_op)

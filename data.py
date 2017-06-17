@@ -2,6 +2,7 @@ import tensorflow as tf
 import numpy as np
 import h5py
 import sys
+import os
 
 
 
@@ -58,3 +59,15 @@ class TFRecordsDataset:
 
 
     
+def get_dataset(name):
+    if name == 'mnist':
+        from tensorflow.examples.tutorials.mnist import input_data
+        return input_data.read_data_sets("data/MNIST_data", one_hot=True)
+    elif name == 'floorplans':
+        return TFRecordsDataset([os.path.join('data', 'floorplans.64.train.tfrecords')],
+                                    {'image_raw': tf.FixedLenFeature([], tf.string)},
+                                    [64, 64, 3])
+    elif name == 'cifar':
+        return TFRecordsDataset([os.path.join('data', 'cifar.32.train.tfrecords')],
+                                    {'image_raw': tf.FixedLenFeature([], tf.string)},
+                                    [32, 32, 3])

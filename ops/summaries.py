@@ -11,13 +11,26 @@ from util import tensor_name
 
 
 def summarize_gradients(grads_and_vars, name=None):
+    """Adds histogram summaries for input list.
+
+    Args:
+      grads_and_vars: List, a list of tuples in form (grad, var).e
+      name: String, name to use for var scope.
+    """
     with tf.name_scope(name, 'gradients', grads_and_vars):
         for g, v in grads_and_vars:
             tf.summary.histogram(v.name + '/gradient', g)
 
 
 def activation_summary(x, rows=0, cols=0, montage=True, name=None):
-    """Summarize activations of input tensor."""
+    """Summarize activations of input tensor.
+
+    Args:
+      x: Tensor, the input tensor to summarize. 
+      rows: Integer, number of rows in montage (if applicable).
+      cols: Integer, number of columns in montage (if applicable).
+      montage: Boolean, whether to generate an image montage of this tensor.
+    """
     n = tensor_name(x)
     # n = re.sub('tower_[0-9]*/', '', x.op.name).split('/')[-1]
     with tf.name_scope(name, 'activations', [x]):
@@ -28,7 +41,15 @@ def activation_summary(x, rows=0, cols=0, montage=True, name=None):
             
 
 def factorization(n):
-    """Finds factors of n suitable for image montage."""
+    """Finds factors of n suitable for image montage.
+
+    Args:
+      n: Integer, value to factorize. Should not be prime!
+
+    Returns: 
+      A tuple of form (m, n) representing the number of rows and
+      columns this number factorizes to.
+    """
     for i in range(int(sqrt(float(n))), 0, -1):
         if n % i == 0: #and i > 1:
             return (i, int(n/i))

@@ -15,7 +15,37 @@ import pickle
 import re
 
 from data import TFRecordsDataset
-from ops.input import input_slice
+from ops.input import batch_slice
+
+
+
+def default_training(train_op):
+    """Trainining function that just runs an op (or list of ops)."""
+    def helper(sess, args):
+        sess.run(train_op)
+    return helper
+
+
+def merge_all_summaries():
+    """Shorthand to get all summaries and merge them into one op."""
+    return tf.summary.merge(tf.get_collection(tf.GraphKeys.SUMMARIES))
+
+
+def default_to_cpu(func):
+    """Decorator to default all variables to the CPU.
+
+    Primarily used for defining model init functions.
+
+    Args:
+      func: Function, function to call within CPU scope.
+
+    Returns:
+      A decorator/wrapper function. 
+    """
+    def wrapper(*args, **kwargs):
+        with tf.device('/cpu:0'):
+            return func(*args, **kwargs)
+    return wrapper
 
 
 
@@ -24,7 +54,8 @@ def tower_scope_range(x, n_gpus, batch_size):
 
     This iterator can be used to wrap around model construction and will
     generate an appropriate GPU scope and a slice of the input tensor.
-    The size
+    This iterator will automatically reuse variable scope after first 
+    tower. 
 
     Args: 
       x: Tensor, the input tensor to this model.  
@@ -40,9 +71,11 @@ def tower_scope_range(x, n_gpus, batch_size):
         for gpu_id in range(n_gpus):
             with tf.device(variables_on_cpu(gpu_id)):
                 with tf.name_scope('tower_{}'.format(gpu_id)) as scope:
-                    yield input_slice(x, batch_size, gpu_id), scope, gpu_id
+                    yield batch_slice(x, batch_size, gpu_id), scope, gpu_id
+                    tf.get_variable_scope().reuse_variables()
 
 
+                    
 def tensor_name(x):
     """Remove tower prefix from tensor name.
 
@@ -173,36 +206,6 @@ def status_tracker(sess, global_step, losses, start_time):
     print_progress(step, l, start_time)
 
 
-def get_dataset(name):
-    if name == 'mnist':
-        from tensorflow.examples.tutorials.mnist import input_data
-        return input_data.read_data_sets("data/MNIST_data", one_hot=True)
-    elif name == 'floorplans':
-        return TFRecordsDataset([os.path.join('data', 'floorplans.64.train.tfrecords')],
-                                    {'image_raw': tf.FixedLenFeature([], tf.string)},
-                                    [64, 64, 3])
-    elif name == 'cifar':
-        return TFRecordsDataset([os.path.join('data', 'cifar.32.train.tfrecords')],
-                                    {'image_raw': tf.FixedLenFeature([], tf.string)},
-                                    [32, 32, 3])
-
-
-def prep_workspace(dirname):
-    subdirs = [os.path.join(dirname, "checkpoints"),
-               os.path.join(dirname, "images"),
-               os.path.join(dirname, "logs")]
-
-    if not os.path.exists(dirname):
-        os.makedirs(dirname)
-    for d in subdirs:
-        if not os.path.exists(d):
-            os.mkdir(d)
-            
-    # return {'train_loss': open(os.path.join(dirname, "logs", "train_loss.csv"), 'a'),
-    #         'validate_loss': open(os.path.join(dirname, "logs", "validate_loss.csv"), 'a'),
-    #         'test_loss' : open(os.path.join(dirname, "logs", "test_loss.csv"), 'a')}
-
-
 def visualize_parameters():
     total_params = 0
 
@@ -225,7 +228,7 @@ def visualize_parameters():
     print('\nModel parameters:')
     print('=' * 40)
     for k,v in categories.items():
-        debug(k)
+        message(k)
         for item in v:
             shape = item.get_shape()
             print('\t{}, shape: {}'.format(item.name.split('/')[-1], shape))
@@ -240,7 +243,7 @@ def visualize_parameters():
     print('\nModel layers:')
     print('=' * 40)
     for k, v in categories.items():
-        debug(k)
+        message(k)
         for item in v:
             shape = item.get_shape()
             print('\t{}, shape: {}'.format(item.name.split('/')[-1], shape))
@@ -300,13 +303,13 @@ OKBLUE = '\033[94m'
 ENDC = '\033[0m'
 BOLD = '\033[1m'
 
-def debug(*args):
+def message(*args):
     if len(args) > 1:
         print(BOLD + OKBLUE + str(args[0]), args[1:], ENDC)
     else:
         print(BOLD + OKBLUE + str(args[0]), ENDC)
 
-    
+        
 def fold(sess, x_input, ops, data, batch_size, num_batches):
     """Runs each op on the data in batches and returns the average value for each op."""
     start_time = time.time()
