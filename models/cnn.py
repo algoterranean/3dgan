@@ -27,6 +27,9 @@ def cnn(x, args):
     opt = init_optimizer(args)
     tower_grads = []
 
+    # rescale to [-1, 1]
+    x = 2 * (x - 0.5)
+
     for x, scope, gpu_id in tower_scope_range(x, args.n_gpus, args.batch_size):
         # create model
         with tf.variable_scope('encoder'):
@@ -52,8 +55,11 @@ def cnn(x, args):
 
 def summaries(x, d, args):
     ne = int(sqrt(args.examples))
-    montage_summary(x[0:args.examples], ne, ne, 'examples/inputs')
-    montage_summary(d[0:args.examples], ne, ne, 'examples/outputs')
+    inputs = (x[0:args.examples] + 1.0) / 2.0
+    outputs = (d[0:args.examples] + 1.0) / 2.0
+    
+    montage_summary(inputs, ne, ne, 'examples/inputs')
+    montage_summary(outputs, ne, ne, 'examples/outputs')
 
 
 def loss(x, d):
@@ -118,7 +124,7 @@ def decoder(x, latent_size, reuse=False):
         x = deconv2d(x, 256, 256, 5, 2, name='dc1')
         x = deconv2d(x, 256, 128, 5, 2, name='dc2')
         x = deconv2d(x, 128,  64, 5, 2, name='dc3')
-        x = deconv2d(x,  64,   3, 5, 2, name='dc4', activation=tf.nn.sigmoid)
+        x = deconv2d(x,  64,   3, 5, 2, name='dc4', activation=tf.nn.tanh)
     return x
 
 
