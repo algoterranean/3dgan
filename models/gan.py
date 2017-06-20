@@ -46,14 +46,16 @@ def gan(x, args):
     g_opt, d_opt = init_optimizer(args), init_optimizer(args)
     g_tower_grads, d_tower_grads = [], []
 
-    # flatten and rescale [0,1] to [-1,1]
     x = flatten(x)
-    x = 2 * (x- 0.5)
+    x = 2 * (x - 0.5)    
+    # rescale [0,1] to [-1,1] depending on model
+    # if args.model in ['wgan', 'iwgan']:
+    # x = 2 * (x - 0.5)
             
     for x, scope, gpu_id in tower_scope_range(x, args.n_gpus, args.batch_size):
         # model
         with tf.variable_scope('generator'):
-            g = generator(args.batch_size, args.latent_size, reuse=(gpu_id>0))
+            g = generator(args.batch_size, args.latent_size, args, reuse=(gpu_id>0))
         with tf.variable_scope('discriminator'):
             d_real = discriminator(x, args, reuse=(gpu_id>0))
             d_fake = discriminator(g, args, reuse=True)
@@ -81,7 +83,7 @@ def gan(x, args):
     if args.model == 'gan':
         train_func = _train_gan(g_apply_grads, d_apply_grads, batchnorm_updates)
     elif args.model == 'wgan':
-        train_func = _train_wgan(g_apply_grads, d_apply_grads, d_params, batchnorm_updates)
+        train_func = _train_wgan(g_apply_grads, g_params, d_apply_grads, d_params, batchnorm_updates)
     elif args.model == 'iwgan':
         train_func = _train_iwgan(g_apply_grads, d_apply_grads, batchnorm_updates)
         
@@ -121,7 +123,7 @@ def _train_gan(g_apply_grads, d_apply_grads, batchnorm_updates):
     return helper
 
 
-def _train_wgan(g_apply_grads, d_apply_grads, d_params, batchnorm_updates):
+def _train_wgan(g_apply_grads, g_params, d_apply_grads, d_params, batchnorm_updates):
     """Generates helper to train a WGAN.
 
     This training method uses weight clipping and trains the
@@ -130,9 +132,11 @@ def _train_wgan(g_apply_grads, d_apply_grads, d_params, batchnorm_updates):
     """
     # add weight clipping method
     clip_D = [p.assign(tf.clip_by_value(p, -0.01, 0.01)) for p in d_params]
+    clip_G = [p.assign(tf.clip_by_value(p, -0.01, 0.01)) for p in g_params]
     with tf.control_dependencies(batchnorm_updates):
         with tf.control_dependencies(clip_D):
             d_train_op = d_apply_grads
+        with tf.control_dependencies(clip_G):
             g_train_op = g_apply_grads
     def helper(sess, args):
         for i in range(args.n_disc_train):
@@ -173,11 +177,11 @@ def losses(x, g, d_fake, d_real, args):
       d_loss: Tensor, the discriminator's loss function.
     """
     if args.model == 'gan':
-        g_loss = tf.reduce_mean(-tf.log(d_fake + 1e-8))
-        d_loss = tf.reduce_mean(-tf.log(d_real + 1e-8) - tf.log(1 - d_fake + 1e-8))
+        g_loss = tf.reduce_mean(-tf.log(d_fake + 1e-8), name='g_loss')
+        d_loss = tf.identity(tf.reduce_mean(-tf.log(d_real + 1e-8) - tf.log(1 - d_fake + 1e-8)), name='d_loss')
     elif args.model == 'wgan':
-        g_loss = -tf.reduce_mean(d_fake)
-        d_loss = tf.reduce_mean(d_fake) - tf.reduce_mean(d_real)
+        g_loss = tf.identity(-tf.reduce_mean(d_fake), name='g_loss')
+        d_loss = tf.identity(tf.reduce_mean(d_fake) - tf.reduce_mean(d_real), name='d_loss')
     elif args.model == 'iwgan':
         l_term = 10.0
         g_loss = -tf.reduce_mean(d_fake)
@@ -211,12 +215,13 @@ def gradient_penalty(x, g, args):
     return penalty
 
 
-def generator(batch_size, latent_size, reuse=False):
+def generator(batch_size, latent_size, args, reuse=False):
     """Adds generator nodes to the graph.
 
     From noise, applies deconv2d until image is scaled up to match
     the dataset.
     """
+    # final_activation = tf.tanh if args.model in ['wgan', 'iwgan'] else tf.nn.sigmoid
     output_dim = 64*64*3
     with arg_scope([dense, deconv2d],
                        reuse = reuse,
@@ -229,7 +234,7 @@ def generator(batch_size, latent_size, reuse=False):
         y = deconv2d(y, 4*latent_size, 2*latent_size, 5, 2, name='dc1')
         y = deconv2d(y, 2*latent_size, latent_size, 5, 2, name='dc2')
         y = deconv2d(y, latent_size, int(latent_size/2), 5, 2, name='dc3')
-        y = deconv2d(y, int(latent_size/2), 3, 5, 2, name='dc4', activation=tf.tanh)
+        y = deconv2d(y, int(latent_size/2), 3, 5, 2, name='dc4', activation=tf.tanh, use_batch_norm=False)
         y = tf.reshape(y, [-1, output_dim])
     return y
 
@@ -249,20 +254,21 @@ def discriminator(x, args, reuse=False):
     reuse: Boolean, whether to reuse variables.
 
     Returns:
-    Final output of discriminator pipeline. 
+    Final output of discriminator pipeline.
     """
     use_bn = False if args.model == 'iwgan' else True
+    final_activation = None if args.model in ['wgan', 'iwgan'] else tf.nn.sigmoid
     with arg_scope([conv2d],
                        use_batch_norm = use_bn,
                        activation = lrelu,
                        reuse = reuse,
                        add_summaries = True):
         x = tf.reshape(x, [-1, 64, 64, 3])
-        x = conv2d(x, 3, args.latent_size, 5, 2, name='c1')
+        x = conv2d(x, 3, args.latent_size, 5, 2, name='c1', use_batch_norm=False)
         x = conv2d(x, args.latent_size, args.latent_size*2, 5, 2, name='c2')
         x = conv2d(x, args.latent_size*2, args.latent_size*4, 5, 2, name='c3')
         x = tf.reshape(x, [-1, 4*4*4*args.latent_size])
-        x = dense(x, 4*4*4*args.latent_size, 1, use_batch_norm=False, activation=None, name='fc2', reuse=reuse)
+        x = dense(x, 4*4*4*args.latent_size, 1, use_batch_norm=False, activation=final_activation, name='fc2', reuse=reuse)
         x = tf.reshape(x, [-1])
     return x
 

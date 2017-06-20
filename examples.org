@@ -1,0 +1,165 @@
+* VAE
+
+> python train.py --model vae --dir workspace/tests/new-vae --epochs 100 --n_gpus 2 --batch_size 256
+Parsing options...
+    seed = b'\xdcB\xafy'
+    n_gpus = 2
+    profile = False
+    epochs = 100
+    batch_size = 256
+    examples = 64
+    dir = workspace/tests/new-vae
+    summary_freq = 120
+    checkpoint_freq = 600
+    n_disc_train = 5
+    optimizer = rmsprop
+    lr = 0.001
+    loss = l1
+    momentum = 0.01
+    decay = 0.9
+    centered = False
+    beta1 = 0.9
+    beta2 = 0.999
+    model = vae
+    latent_size = 200
+    dataset = floorplans
+    resize = False
+    grayscale = False
+Initializing input pipeline...
+Initializing model...
+Initializing supervisor...
+Starting training...
+	Iteration 30971: decoder_loss: 722187.2500, latent_loss: 213448.4375, total_loss: 935635.6875 (5520 sec)
+Training complete! Elapsed time: 5582s
+
+* CNN
+
+> python train.py --model cnn --dir workspace/tests/new-cnn --epochs 100 --n_gpus 2 --batch_size 256 --optimizer rmsprop --lr 1e-4
+Parsing options...
+    seed = b'\x17\x8dt\xd9'
+    n_gpus = 2
+    profile = False
+    epochs = 100
+    batch_size = 256
+    examples = 64
+    dir = workspace/tests/new-cnn2
+    summary_freq = 120
+    checkpoint_freq = 600
+    n_disc_train = 5
+    optimizer = rmsprop
+    lr = 0.0001
+    loss = l1
+    momentum = 0.01
+    decay = 0.9
+    centered = False
+    beta1 = 0.9
+    beta2 = 0.999
+    model = cnn
+    latent_size = 200
+    dataset = floorplans
+    resize = False
+    grayscale = False
+Initializing input pipeline...
+Initializing model...
+Initializing supervisor...
+Starting training...
+	Iteration 30858: loss: 0.1273 (5160 sec)
+Training complete! Elapsed time: 5238s
+* GAN
+> python train.py --model gan --dir workspace/tests/new-gan --epochs 100 --n_gpus 2 --batch_size 256 --lr 2.5e-5
+Parsing options...
+    seed = b'\xdc\xd6\x94\xad'
+    n_gpus = 2
+    profile = False
+    epochs = 100
+    batch_size = 256
+    examples = 64
+    dir = workspace/tests/new-gan
+    summary_freq = 120
+    checkpoint_freq = 600
+    n_disc_train = 5
+    optimizer = rmsprop
+    lr = 2.5e-05
+    loss = l1
+    momentum = 0.01
+    decay = 0.9
+    centered = False
+    beta1 = 0.9
+    beta2 = 0.999
+    model = gan
+    latent_size = 200
+    dataset = floorplans
+    resize = False
+    grayscale = False
+Initializing input pipeline...
+Initializing model...
+Initializing supervisor...
+Starting training...
+	Iteration 61533: g_loss: 17.7300, d_loss: 0.0000 (33243 sec)
+Training complete! Elapsed time: 33338s
+* WGAN
+> python train.py --model wgan --dir workspace/tests/new-wgan --epochs 100 --n_gpus 2 --batch_size 256 --lr 2.5e-5
+Parsing options...
+    seed = b'dL\xb2\x08'
+    n_gpus = 2
+    profile = False
+    epochs = 100
+    batch_size = 256
+    examples = 64
+    dir = workspace/tests/new-wgan
+    summary_freq = 120
+    checkpoint_freq = 600
+    n_disc_train = 5
+    optimizer = rmsprop
+    lr = 2.5e-05
+    loss = l1
+    momentum = 0.01
+    decay = 0.9
+    centered = False
+    beta1 = 0.9
+    beta2 = 0.999
+    model = wgan
+    latent_size = 200
+    dataset = floorplans
+    resize = False
+    grayscale = False
+Initializing input pipeline...
+Initializing model...
+Initializing supervisor...
+Starting training...
+	Iteration 37052: g_loss: 7613.0981, d_loss: -15768.2031 (26402 sec)
+Training complete! Elapsed time: 26481s
+* IWGAN
+
+> python train.py --model iwgan --dir workspace/tests/new-iwgan --epochs 100 --n_gpus 2 --batch_size 256 --optimizer adam --lr 1e-4 --beta1 0.5 --beta2 0.9
+Parsing options...
+    seed = b'"\xf9u\x0e'
+    n_gpus = 2
+    profile = False
+    epochs = 100
+    batch_size = 256
+    examples = 64
+    dir = workspace/tests/new-iwgan
+    summary_freq = 120
+    checkpoint_freq = 600
+    n_disc_train = 5
+    optimizer = adam
+    lr = 0.0001
+    loss = l1
+    momentum = 0.01
+    decay = 0.9
+    centered = False
+    beta1 = 0.5
+    beta2 = 0.9
+    model = iwgan
+    latent_size = 200
+    dataset = floorplans
+    resize = False
+    grayscale = False
+Initializing input pipeline...
+Initializing model...
+Initializing supervisor...
+Starting training...
+	Iteration 36904: Neg: 0.2896, add: -0.3506 (37204 sec))
+Training complete! Elapsed time: 37246s
+
