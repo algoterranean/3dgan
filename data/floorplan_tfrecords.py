@@ -16,25 +16,32 @@ def _int64_feature(value):
 
 
 def generate_dataset(name, filename):
-    writer = tf.python_io.TFRecordWriter('floorplans.64.{}.tfrecords'.format(name))
+    writer = tf.python_io.TFRecordWriter('floorplans.{}.tfrecords'.format(name))
 
     image_dir = os.path.join('/mnt/research/datasets/floorplans')
     lines = open(os.path.join(image_dir, filename)).readlines()
     for line in tqdm(lines):
         fn = os.path.join(image_dir, line.strip())
-        img = cv2.imread(fn, cv2.IMREAD_COLOR)
-        img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-        img = cv2.resize(img, (64, 64))
+        # read image
+        with tf.gfile.FastGFile(fn, 'rb') as f:
+            image_data = f.read()
+        # determine shape
+        f = open(fn, 'rb')
+        stuff = f.read()
+        f.close()
+        nparr = np.fromstring(stuff, np.uint8)
+        i = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+        w, h, c = i.shape
+        # write record
+        example = tf.train.Example(features=tf.train.Features(
+            feature={
+                'image': _bytes_feature(image_data),
+                'width': _int64_feature(w),
+                'height': _int64_feature(h),
+                'channels': _int64_feature(c),
+                'filename': _bytes_feature(tf.compat.as_bytes(fn))}))
+        writer.write(example.SerializeToString())
         
-        img_string = img.tostring()
-        if len(img_string) != 12288:
-            print('Bad image!', fn)
-        else:
-            img_w = 64
-            img_h = 64
-            example = tf.train.Example(features=tf.train.Features(feature={'image_raw': _bytes_feature(img_string)}))
-            serialized = example.SerializeToString()
-            writer.write(serialized)
     
 generate_dataset('train', 'train_set.txt')
 generate_dataset('test', 'test_set.txt')

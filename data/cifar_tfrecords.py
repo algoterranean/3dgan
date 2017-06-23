@@ -25,11 +25,11 @@ def generate_dataset(name, filenames):
         images = dict[b'data']
         num_images = images.shape[0]
         images = images.reshape((num_images, 3, 32, 32))
-        
         images = images.transpose((0, 2, 3, 1))
+        
         for img in tqdm(images):
             img_string = img.tostring()
-            example = tf.train.Example(features=tf.train.Features(feature={'image_raw': _bytes_feature(img_string)}))
+            example = tf.train.Example(features=tf.train.Features(feature={'image': _bytes_feature(img_string)}))
             writer.write(example.SerializeToString())
         
 generate_dataset('train', ['data_batch_1', 'data_batch_2', 'data_batch_3', 'data_batch_4', 'data_batch_5'])

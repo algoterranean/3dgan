@@ -19,7 +19,7 @@ def summarize_gradients(grads_and_vars, name=None):
     """
     with tf.name_scope(name, 'gradients', grads_and_vars):
         for g, v in grads_and_vars:
-            tf.summary.histogram(v.name + '/gradient', g)
+            tf.summary.histogram(tensor_name(v) + '/gradient', g)
 
 
 def activation_summary(x, rows=0, cols=0, montage=True, name=None):
@@ -33,11 +33,17 @@ def activation_summary(x, rows=0, cols=0, montage=True, name=None):
     """
     n = tensor_name(x)
     # n = re.sub('tower_[0-9]*/', '', x.op.name).split('/')[-1]
-    with tf.name_scope(name, 'activations', [x]):
-        tf.summary.histogram(n + '/activations/histogram', x)
-        tf.summary.scalar(n + '/activations/sparsity', tf.nn.zero_fraction(x))
-        if montage:
-            montage_summary(tf.transpose(x[0], [2, 0, 1]), name=n + '/activations')
+    # with tf.name_scope(name, 'activations', [x]) as scope:
+        
+    tf.summary.histogram('activations', x)
+    tf.summary.scalar('activations/sparsity', tf.nn.zero_fraction(x))
+    if montage:
+        montage_summary(tf.transpose(x[0], [2, 0, 1]), 'montage')
+        
+        # tf.summary.histogram(n + '/activations/histogram', x)
+        # tf.summary.scalar(n + '/activations/sparsity', tf.nn.zero_fraction(x))
+        # if montage:
+        #     montage_summary(tf.transpose(x[0], [2, 0, 1]), name=n + '/activations')
             
 
 def factorization(n):
@@ -74,7 +80,7 @@ def montage_summary(x, m=0, n=0, name=None):
     if n == 0 or m == 0:
         m, n = factorization(x.get_shape()[0].value)
 
-    with tf.name_scope(name, 'montage', [x]):
+    with tf.name_scope(name, 'montage', [x]) as scope:
         images = tf.split(x, n, axis=0)
         images = tf.concat(images, axis=1)
         images = tf.unstack(images, m, axis=0)
@@ -84,6 +90,6 @@ def montage_summary(x, m=0, n=0, name=None):
             images = tf.expand_dims(images, axis=2)
         # add a first dimension for expected TB format
         images = tf.expand_dims(images, axis=0)
-        y = tf.summary.image(name, images)
+        y = tf.summary.image(scope, images)
     return y
 

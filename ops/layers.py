@@ -54,15 +54,17 @@ def dense(x,
         with tf.variable_scope('vars', reuse=reuse):
             W = tf.get_variable(name=w_name, shape=[input_size, output_size], initializer=init())
             b = tf.get_variable(name=b_name, shape=[output_size], initializer=init())
-            tf.add_to_collection('weights', W)
-            tf.add_to_collection('biases', b)
-            if add_summaries:
+            if not reuse:
+                tf.add_to_collection('weights', W)
+                tf.add_to_collection('biases', b)
+            if add_summaries and not reuse:
                 tf.summary.histogram(w_name, W)
                 tf.summary.histogram(b_name, b)
             h = tf.matmul(x, W) + b
         h = batch_norm(h) if use_batch_norm else h
         h = activation(h) if activation else h
-        tf.add_to_collection('layers', h)
+        if not reuse:
+            tf.add_to_collection('dense_layers', h)
     return h
 
 
@@ -101,18 +103,20 @@ def conv2d(x,
         with tf.variable_scope('vars', reuse=reuse):
             K = tf.get_variable(name=w_name, shape=[filter_size, filter_size, input_size, output_size], initializer=init())
             b = tf.get_variable(name=b_name, shape=[output_size], initializer=init())
-            tf.add_to_collection('weights', K)
-            tf.add_to_collection('biases', b)            
-            if add_summaries:
+            if not reuse:
+                tf.add_to_collection('weights', K)
+                tf.add_to_collection('biases', b)            
+            if add_summaries and not reuse:
                 tf.summary.histogram(w_name, K)
                 tf.summary.histogram(b_name, b)
         h = tf.nn.conv2d(x, K, strides=[1, stride, stride, 1], padding='SAME')
         h = tf.nn.bias_add(h, b)
         h = batch_norm(h) if use_batch_norm else h
         h = activation(h) if activation else h
-        if add_summaries:
+        if add_summaries and not reuse:
             activation_summary(h)
-        tf.add_to_collection('layers', h)
+        if not reuse:
+            tf.add_to_collection('conv_layers', h)
     return h
 
 
@@ -145,9 +149,10 @@ def deconv2d(x,
         with tf.variable_scope('vars', reuse=reuse):
             K = tf.get_variable(w_name, [filter_size, filter_size, output_size, input_size], initializer=init())
             b = tf.get_variable(b_name, [output_size], initializer=init())
-            tf.add_to_collection('weights', K)
-            tf.add_to_collection('biases', b)
-            if add_summaries:
+            if not reuse:
+                tf.add_to_collection('weights', K)
+                tf.add_to_collection('biases', b)
+            if add_summaries and not reuse:
                 tf.summary.histogram(w_name, K)
                 tf.summary.histogram(b_name, b)
         input_shape = tf.shape(x)
@@ -156,9 +161,10 @@ def deconv2d(x,
         h = tf.nn.bias_add(h, b)
         h = batch_norm(h) if use_batch_norm else h
         h = activation(h) if activation else h
-        if add_summaries:
+        if add_summaries and not reuse:
             activation_summary(h)
-        tf.add_to_collection('layers', h)
+        if not reuse:
+            tf.add_to_collection('conv_layers', h)
     return h
 
 

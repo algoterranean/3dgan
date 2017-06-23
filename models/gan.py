@@ -118,8 +118,10 @@ def _train_gan(g_apply_grads, d_apply_grads, batchnorm_updates):
     with tf.control_dependencies(batchnorm_updates):
         g_train_op = g_apply_grads
         d_train_op = d_apply_grads
+    losses = tf.get_collection('losses')
     def helper(sess, args):
-        sess.run([d_train_op, g_train_op])
+        _, _, l = sess.run([d_train_op, g_train_op, losses])
+        return l
     return helper
 
 
@@ -138,10 +140,12 @@ def _train_wgan(g_apply_grads, g_params, d_apply_grads, d_params, batchnorm_upda
             d_train_op = d_apply_grads
         with tf.control_dependencies(clip_G):
             g_train_op = g_apply_grads
+    losses = tf.get_collection('losses')
     def helper(sess, args):
         for i in range(args.n_disc_train):
             sess.run(d_train_op)
-        sess.run(g_train_op)
+        _, l = sess.run([g_train_op, losses])
+        return l
     return helper
 
 
@@ -155,10 +159,13 @@ def _train_iwgan(g_apply_grads, d_apply_grads, batchnorm_updates):
     g_train_op = g_apply_grads
     with tf.control_dependencies(batchnorm_updates):
         d_train_op = d_apply_grads
+    losses = tf.get_collection('losses')
     def helper(sess, args):
         for i in range(args.n_disc_train):
             sess.run(d_train_op)
-        sess.run(g_train_op)
+        _, l = sess.run([g_train_op, losses])
+        return l
+        
     return helper
 
         

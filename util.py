@@ -14,15 +14,17 @@ import time
 import pickle
 import re
 
-from data import TFRecordsDataset
+# from data import TFRecordsDataset
 from ops.input import batch_slice
 
 
 
 def default_training(train_op):
     """Trainining function that just runs an op (or list of ops)."""
+    losses = collection_to_dict(tf.get_collection('losses'))
     def helper(sess, args):
-        sess.run(train_op)
+        _, results = sess.run([train_op, losses])
+        return results
     return helper
 
 
@@ -189,21 +191,38 @@ def collection_to_dict(collection):
         name = name.split(':')[0]
         d[name] = c
     return d
+
+
+def format_for_terminal(results, prev_results):
+    if not prev_results:
+        disp_results = results
+    else:
+        disp_results = {}
+        for k in prev_results:
+            diff = results[k] - prev_results[k]
+            if diff > 0:
+                sym = '+'
+            elif diff < 0:
+                sym = '-'
+            else:
+                sym = '~'
+            disp_results[k] = '{:3f}({})'.format(results[k], sym)
+    return disp_results
+    
         
 
-def print_progress(iterations, loss_dict, start_time):
-    end_time = time.time()
-    s = ""
-    for k, v in loss_dict.items():
-        s += '{}: {:.4f}, '.format(k, v)
-    sys.stdout.write('\r\tIteration {}: {} ({} sec)'.format(iterations, s[:-2], int(end_time - start_time)))
-    # sys.stdout.write('\rEpoch {:03d}: {:05d}/{:05d}: {} ({:d}s)'.format(epoch, completed, total, s[:-2], int(end_time - start_time)))
-    sys.stdout.flush()
+# def print_progress(iterations, max_iterations, loss_dict, start_time):
+#     end_time = time.time()
+#     sys.stdout.write('\r\t{}Iteration {}/{}{} -'.format(OKGREEN + BOLD, iterations, max_iterations, ENDC))
+#     for k, v in loss_dict.items():
+#         sys.stdout.write(' {}{}{} : {:.4f}   '.format(UNDERLINE, k, ENDC, v))
+#     sys.stdout.write(' '*10 + '({} sec)'.format(int(end_time - start_time)))
+#     sys.stdout.flush()
 
 
-def status_tracker(sess, global_step, losses, start_time):
-    l, step = sess.run([losses, global_step])
-    print_progress(step, l, start_time)
+# def status_tracker(sess, global_step, losses, start_time):
+#     l, step = sess.run([losses, global_step])
+#     print_progress(step, l, start_time)
 
 
 def visualize_parameters():
@@ -299,9 +318,15 @@ def visualize_parameters():
     # return total_params
 
 
-OKBLUE = '\033[94m'
-ENDC = '\033[0m'
-BOLD = '\033[1m'
+OKBLUE    = '\033[94m'
+OKGREEN   = '\033[92m'
+WARNING   ='\033[93m'
+FAIL      = '\033[91m'
+ENDC      = '\033[0m'
+UNDERLINE = '\033[4m'
+BOLD      = '\033[1m'
+HEADER    = '\033[95m'
+
 
 def message(*args):
     if len(args) > 1:

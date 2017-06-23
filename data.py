@@ -1,73 +1,62 @@
 import tensorflow as tf
-import numpy as np
-import h5py
-import sys
+from tensorflow.contrib.data import TFRecordDataset
 import os
 
 
+def parse_floorplans(example_proto):
+    features = {
+        'image': tf.FixedLenFeature([], tf.string),
+        'width': tf.FixedLenFeature([], tf.int64),
+        'height': tf.FixedLenFeature([], tf.int64),
+        'channels': tf.FixedLenFeature([], tf.int64),
+        'filename': tf.FixedLenFeature([], tf.string) }
 
-class TFRecordsDataset:
-    def __init__(self, filenames, feature_def, image_shape, num_threads=4):
-        """Generates a batches input queue from a list TFRecords files and their
-        corresponding ProtoBuf def."""
-        self.filenames = filenames
-        self.num_threads = num_threads
-        self.feature_def = feature_def
-        self.image_shape = image_shape
-
-    def batch_tensor(self, batch_size, num_epochs): #, normalize=False):
-        with tf.name_scope('input_queue'):
-            filename_queue = tf.train.string_input_producer(self.filenames, num_epochs=num_epochs)
-            image = self._read_and_decode(filename_queue) #, normalize)
-            images = tf.train.shuffle_batch([image],
-                                                batch_size=batch_size,
-                                                num_threads=self.num_threads,
-                                                capacity=1*batch_size+1000,
-                                                min_after_dequeue=1000)
-        return images
+    parsed = tf.parse_single_example(example_proto, features)
+    image = tf.image.decode_image(parsed['image'], channels=3)
+    w = tf.cast(parsed['width'], tf.int32)
+    h = tf.cast(parsed['height'], tf.int32)
+    c = tf.cast(parsed['channels'], tf.int32)
+    image_shape = tf.stack([w, h, c])
+    image = tf.reshape(image, image_shape)
+    image = tf.image.resize_images(image, [64, 64])
+    image = tf.cast(image, tf.float32) / 255.0
+    return image
 
 
-    # img_1d = np.fromstring(img_string, dtype=np.uint8)
+def parse_cifar(example_proto):
+    features = {'image': tf.FixedLenFeature([], tf.string)}
+    parsed = tf.parse_single_example(example_proto, features)
+    image = parsed['image']
+    image = tf.cast(image, tf.float32) / 255.0
+    return image
     
 
-    def _read_and_decode(self, filename_queue): #, normalize=False):
-        reader = tf.TFRecordReader()
-        _, serialized_example = reader.read(filename_queue)
-        features = tf.parse_single_example(serialized_example, features=self.feature_def)
-        image = tf.decode_raw(features['image_raw'], tf.uint8)
+def get_dataset(args):
+    if args.dataset == 'floorplans':
+        fn = 'data/floorplans.train.tfrecords'
+        d = TFRecordDataset(fn)
+        d = d.map(parse_floorplans)
+    elif args.dataset == 'cifar':
+        fn = 'data/cifar.32.train.tfrecords'
+        d = TFRecordDataset(fn)
+        d = d.map(parse_cifar)
 
-        # img_string = features
+    # d = tf.train.shuffle_batch(d, batch_size=args.batch_size, capacity=10000, num_threads=4, min_after_dequeue=20)
+    # x = d
+    # d = d.cache('tmp/')
+    d = d.cache(os.path.join(args.cache_dir, 'cache')) if args.cache_dir else d.cache()
+    d = d.repeat()
+    d = d.shuffle(buffer_size=args.buffer_size)
+    d = d.batch(args.batch_size * args.n_gpus)
 
-        # img_1d = np.fromstring(img_string, dtype=np.uint8)
+    iterator = d.make_initializable_iterator()
+    x = iterator.get_next()
 
+    # determine size of dataset
+    c = sum([1 for r in tf.python_io.tf_record_iterator(fn)])
 
-        # get size of flattened shape
-        c = 1
-        for i in self.image_shape:
-            c *= i
-
-        image.set_shape([c])
-        image = tf.reshape(image, self.image_shape)
-        image = tf.cast(image, tf.float32) / 255.0
-        # image = image / 255.0
-        # image = tf.cast(image, tf.float32) * (1.0 / 255.0)
-        # image = tf.image.resize_images(image, [64, 64])
-        # image = tf.image.per_image_standardization(image)
-        # if normalize:
-        #     image = image - 0.5
-        return image
-
-
+    # return d, int(c)
     
-def get_dataset(name):
-    if name == 'mnist':
-        from tensorflow.examples.tutorials.mnist import input_data
-        return input_data.read_data_sets("data/MNIST_data", one_hot=True)
-    elif name == 'floorplans':
-        return TFRecordsDataset([os.path.join('data', 'floorplans.64.train.tfrecords')],
-                                    {'image_raw': tf.FixedLenFeature([], tf.string)},
-                                    [64, 64, 3])
-    elif name == 'cifar':
-        return TFRecordsDataset([os.path.join('data', 'cifar.32.train.tfrecords')],
-                                    {'image_raw': tf.FixedLenFeature([], tf.string)},
-                                    [32, 32, 3])
+    return x, iterator.initializer, int(c)
+
+        

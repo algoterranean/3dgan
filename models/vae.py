@@ -54,7 +54,7 @@ def vae(x, args):
 def summaries(x, d_fake, d_real, args):
     """Add montage summaries for examples and samples."""
     ne = int(sqrt(args.examples))
-    montage_summary(x[0:args.examples], name='examples/inputs')
+    montage_summary(x[0:args.examples], ne, ne, name='examples/inputs')
     montage_summary(d_real[0:args.examples], ne, ne, name='examples/real_decoded')
     montage_summary(d_fake[0:args.examples], ne, ne, name='examples/fake_decoded')
 
