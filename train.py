@@ -15,7 +15,6 @@ from tqdm import tqdm, trange
 from sys import stdout
 from os import path
 
-from msssim import MultiScaleSSIM, tf_ssim, tf_ms_ssim
 from util import *
 from data import get_dataset
 from models.cnn import cnn

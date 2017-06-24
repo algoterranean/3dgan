@@ -10,6 +10,12 @@ from math import sqrt
 from util import tensor_name
 
 
+
+
+
+
+
+
 def summarize_gradients(grads_and_vars, name=None):
     """Adds histogram summaries for input list.
 
@@ -22,28 +28,28 @@ def summarize_gradients(grads_and_vars, name=None):
             tf.summary.histogram(tensor_name(v) + '/gradient', g)
 
 
-def activation_summary(x, rows=0, cols=0, montage=True, name=None):
-    """Summarize activations of input tensor.
+# def activation_summary(x, rows=0, cols=0, montage=True, name=None):
+#     """Summarize activations of input tensor.
 
-    Args:
-      x: Tensor, the input tensor to summarize. 
-      rows: Integer, number of rows in montage (if applicable).
-      cols: Integer, number of columns in montage (if applicable).
-      montage: Boolean, whether to generate an image montage of this tensor.
-    """
-    n = tensor_name(x)
-    # n = re.sub('tower_[0-9]*/', '', x.op.name).split('/')[-1]
-    # with tf.name_scope(name, 'activations', [x]) as scope:
+#     Args:
+#       x: Tensor, the input tensor to summarize. 
+#       rows: Integer, number of rows in montage (if applicable).
+#       cols: Integer, number of columns in montage (if applicable).
+#       montage: Boolean, whether to generate an image montage of this tensor.
+#     """
+#     n = tensor_name(x)
+#     # n = re.sub('tower_[0-9]*/', '', x.op.name).split('/')[-1]
+#     # with tf.name_scope(name, 'activations', [x]) as scope:
         
-    tf.summary.histogram('activations', x)
-    tf.summary.scalar('activations/sparsity', tf.nn.zero_fraction(x))
-    if montage:
-        montage_summary(tf.transpose(x[0], [2, 0, 1]), 'montage')
+#     tf.summary.histogram('activations', x)
+#     tf.summary.scalar('activations/sparsity', tf.nn.zero_fraction(x))
+#     if montage:
+#         montage_summary(tf.transpose(x[0], [2, 0, 1]), 'montage')
         
-        # tf.summary.histogram(n + '/activations/histogram', x)
-        # tf.summary.scalar(n + '/activations/sparsity', tf.nn.zero_fraction(x))
-        # if montage:
-        #     montage_summary(tf.transpose(x[0], [2, 0, 1]), name=n + '/activations')
+#         # tf.summary.histogram(n + '/activations/histogram', x)
+#         # tf.summary.scalar(n + '/activations/sparsity', tf.nn.zero_fraction(x))
+#         # if montage:
+#         #     montage_summary(tf.transpose(x[0], [2, 0, 1]), name=n + '/activations')
             
 
 def factorization(n):

@@ -9,7 +9,6 @@ from tensorflow.contrib.framework.python.ops.arg_scope import add_arg_scope
 from tensorflow.contrib.layers import xavier_initializer
 from tensorflow.contrib.layers import batch_norm
 import re
-from ops.summaries import activation_summary
 from util import tensor_name
 
 
@@ -31,7 +30,6 @@ def dense(x,
           init=xavier_initializer,
           use_batch_norm=False,
           activation=None,
-          add_summaries=False,
           reuse=False,
           name=None):
     """Standard dense (fully connected) layer. 
@@ -42,7 +40,6 @@ def dense(x,
       output_size: Integer, number of output neurons.
       use_batch_norm: Boolean, whether to use batch normalizationn.
       activation: Operation, activation function.
-      add_summaries: Boolean, whether to add summaries for variables and activations.
       reuse: Boolean, whether to reuse variables.
       name: String, name of output tensor.
 
@@ -57,9 +54,6 @@ def dense(x,
             if not reuse:
                 tf.add_to_collection('weights', W)
                 tf.add_to_collection('biases', b)
-            if add_summaries and not reuse:
-                tf.summary.histogram(w_name, W)
-                tf.summary.histogram(b_name, b)
             h = tf.matmul(x, W) + b
         h = batch_norm(h) if use_batch_norm else h
         h = activation(h) if activation else h
@@ -77,7 +71,6 @@ def conv2d(x,
            init = xavier_initializer,
            use_batch_norm = False,
            activation = None,
-           add_summaries = False,
            reuse = False,
            name = None):
     """Standard 2D convolutional layer.
@@ -90,7 +83,6 @@ def conv2d(x,
       stride: Integer, width/height convolution striding. Must be at least 1.
       use_batch_norm: Boolean, whether to use batch normalizationn.
       activation: Operation, activation function.
-      add_summaries: Boolean, whether to add summaries for variables and activations.
       reuse: Boolean, whether to reuse variables.
       name: String, name of output tensor.
 
@@ -106,15 +98,10 @@ def conv2d(x,
             if not reuse:
                 tf.add_to_collection('weights', K)
                 tf.add_to_collection('biases', b)            
-            if add_summaries and not reuse:
-                tf.summary.histogram(w_name, K)
-                tf.summary.histogram(b_name, b)
         h = tf.nn.conv2d(x, K, strides=[1, stride, stride, 1], padding='SAME')
         h = tf.nn.bias_add(h, b)
         h = batch_norm(h) if use_batch_norm else h
         h = activation(h) if activation else h
-        if add_summaries and not reuse:
-            activation_summary(h)
         if not reuse:
             tf.add_to_collection('conv_layers', h)
     return h
@@ -129,7 +116,6 @@ def deconv2d(x,
              init=xavier_initializer,
              use_batch_norm=False,
              activation=None,
-             add_summaries=False,
              reuse = False,
              name=None):
     """Standard fractionally strided (deconvolutional) layer.
@@ -137,7 +123,6 @@ def deconv2d(x,
     Args:
       use_batch_norm: Boolean, whether to use batch normalizationn.
       activation: Operation, activation function.
-      add_summaries: Boolean, whether to add summaries for variables and activations.
       reuse: Boolean, whether to reuse variables.
       name: String, name of output tensor.    
 
@@ -152,17 +137,12 @@ def deconv2d(x,
             if not reuse:
                 tf.add_to_collection('weights', K)
                 tf.add_to_collection('biases', b)
-            if add_summaries and not reuse:
-                tf.summary.histogram(w_name, K)
-                tf.summary.histogram(b_name, b)
         input_shape = tf.shape(x)
         output_shape = tf.stack([input_shape[0], input_shape[1]*2, input_shape[2]*2, output_size])
         h = tf.nn.conv2d_transpose(x, K, output_shape=output_shape, strides=[1, stride, stride, 1], padding='SAME')
         h = tf.nn.bias_add(h, b)
         h = batch_norm(h) if use_batch_norm else h
         h = activation(h) if activation else h
-        if add_summaries and not reuse:
-            activation_summary(h)
         if not reuse:
             tf.add_to_collection('conv_layers', h)
     return h
