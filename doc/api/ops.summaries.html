@@ -1,0 +1,75 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.0 Transitional//EN">
+<html><head><title>Python: module ops.summaries</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+</head><body bgcolor="#f0f0f8">
+
+<table width="100%" cellspacing=0 cellpadding=2 border=0 summary="heading">
+<tr bgcolor="#7799ee">
+<td valign=bottom>&nbsp;<br>
+<font color="#ffffff" face="helvetica, arial">&nbsp;<br><big><big><strong><a href="ops.html"><font color="#ffffff">ops</font></a>.summaries</strong></big></big></font></td
+><td align=right valign=bottom
+><font color="#ffffff" face="helvetica, arial"><a href=".">index</a><br><a href="file:/mnt/research/projects/autoencoders/ops/summaries.py">/mnt/research/projects/autoencoders/ops/summaries.py</a></font></td></tr></table>
+    <p><tt>Implementation&nbsp;of&nbsp;useful&nbsp;summary&nbsp;ops.</tt></p>
+<p>
+<table width="100%" cellspacing=0 cellpadding=2 border=0 summary="section">
+<tr bgcolor="#aa55cc">
+<td colspan=3 valign=bottom>&nbsp;<br>
+<font color="#ffffff" face="helvetica, arial"><big><strong>Modules</strong></big></font></td></tr>
+    
+<tr><td bgcolor="#aa55cc"><tt>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</tt></td><td>&nbsp;</td>
+<td width="100%"><table width="100%" summary="list"><tr><td width="25%" valign=top><a href="re.html">re</a><br>
+</td><td width="25%" valign=top><a href="tensorflow.html">tensorflow</a><br>
+</td><td width="25%" valign=top></td><td width="25%" valign=top></td></tr></table></td></tr></table><p>
+<table width="100%" cellspacing=0 cellpadding=2 border=0 summary="section">
+<tr bgcolor="#eeaa77">
+<td colspan=3 valign=bottom>&nbsp;<br>
+<font color="#ffffff" face="helvetica, arial"><big><strong>Functions</strong></big></font></td></tr>
+    
+<tr><td bgcolor="#eeaa77"><tt>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</tt></td><td>&nbsp;</td>
+<td width="100%"><dl><dt><a name="-activation_summary"><strong>activation_summary</strong></a>(x, rows=0, cols=0, montage=True, name=None)</dt><dd><tt>Summarize&nbsp;activations&nbsp;of&nbsp;input&nbsp;tensor.<br>
+&nbsp;<br>
+Args:<br>
+&nbsp;&nbsp;x:&nbsp;Tensor,&nbsp;the&nbsp;input&nbsp;tensor&nbsp;to&nbsp;summarize.&nbsp;<br>
+&nbsp;&nbsp;rows:&nbsp;Integer,&nbsp;number&nbsp;of&nbsp;rows&nbsp;in&nbsp;montage&nbsp;(if&nbsp;applicable).<br>
+&nbsp;&nbsp;cols:&nbsp;Integer,&nbsp;number&nbsp;of&nbsp;columns&nbsp;in&nbsp;montage&nbsp;(if&nbsp;applicable).<br>
+&nbsp;&nbsp;montage:&nbsp;Boolean,&nbsp;whether&nbsp;to&nbsp;generate&nbsp;an&nbsp;image&nbsp;montage&nbsp;of&nbsp;this&nbsp;tensor.</tt></dd></dl>
+ <dl><dt><a name="-factorization"><strong>factorization</strong></a>(n)</dt><dd><tt>Finds&nbsp;factors&nbsp;of&nbsp;n&nbsp;suitable&nbsp;for&nbsp;image&nbsp;montage.<br>
+&nbsp;<br>
+Args:<br>
+&nbsp;&nbsp;n:&nbsp;Integer,&nbsp;value&nbsp;to&nbsp;factorize.&nbsp;Should&nbsp;not&nbsp;be&nbsp;prime!<br>
+&nbsp;<br>
+Returns:&nbsp;<br>
+&nbsp;&nbsp;A&nbsp;tuple&nbsp;of&nbsp;form&nbsp;(m,&nbsp;n)&nbsp;representing&nbsp;the&nbsp;number&nbsp;of&nbsp;rows&nbsp;and<br>
+&nbsp;&nbsp;columns&nbsp;this&nbsp;number&nbsp;factorizes&nbsp;to.</tt></dd></dl>
+ <dl><dt><a name="-montage_summary"><strong>montage_summary</strong></a>(x, m=0, n=0, name=None)</dt><dd><tt>Generates&nbsp;a&nbsp;m&nbsp;x&nbsp;n&nbsp;image&nbsp;montage&nbsp;from&nbsp;the&nbsp;given&nbsp;tensor.<br>
+&nbsp;<br>
+If&nbsp;m&nbsp;or&nbsp;n&nbsp;is&nbsp;0,&nbsp;attempts&nbsp;to&nbsp;infer&nbsp;the&nbsp;input&nbsp;shape&nbsp;at&nbsp;run&nbsp;time.&nbsp;&nbsp;Note<br>
+that&nbsp;this&nbsp;may&nbsp;not&nbsp;always&nbsp;be&nbsp;possible.<br>
+&nbsp;<br>
+Args:<br>
+&nbsp;&nbsp;x:&nbsp;Tensor,&nbsp;images&nbsp;to&nbsp;combine&nbsp;in&nbsp;montage.&nbsp;<br>
+&nbsp;&nbsp;m:&nbsp;Integer,&nbsp;number&nbsp;of&nbsp;rows&nbsp;in&nbsp;montage&nbsp;grid.<br>
+&nbsp;&nbsp;n:&nbsp;Integer,&nbsp;number&nbsp;of&nbsp;columns&nbsp;in&nbsp;montage&nbsp;grid.<br>
+&nbsp;&nbsp;name:&nbsp;String,&nbsp;name&nbsp;of&nbsp;this&nbsp;summary.<br>
+&nbsp;<br>
+Returns:<br>
+&nbsp;&nbsp;Summary&nbsp;image&nbsp;node&nbsp;containing&nbsp;the&nbsp;montage.</tt></dd></dl>
+ <dl><dt><a name="-sqrt"><strong>sqrt</strong></a>(...)</dt><dd><tt><a href="#-sqrt">sqrt</a>(x)<br>
+&nbsp;<br>
+Return&nbsp;the&nbsp;square&nbsp;root&nbsp;of&nbsp;x.</tt></dd></dl>
+ <dl><dt><a name="-summarize_gradients"><strong>summarize_gradients</strong></a>(grads_and_vars, name=None)</dt><dd><tt>Adds&nbsp;histogram&nbsp;summaries&nbsp;for&nbsp;input&nbsp;list.<br>
+&nbsp;<br>
+Args:<br>
+&nbsp;&nbsp;grads_and_vars:&nbsp;List,&nbsp;a&nbsp;list&nbsp;of&nbsp;tuples&nbsp;in&nbsp;form&nbsp;(grad,&nbsp;var).e<br>
+&nbsp;&nbsp;name:&nbsp;String,&nbsp;name&nbsp;to&nbsp;use&nbsp;for&nbsp;var&nbsp;scope.</tt></dd></dl>
+</td></tr></table><p>
+<table width="100%" cellspacing=0 cellpadding=2 border=0 summary="section">
+<tr bgcolor="#55aa55">
+<td colspan=3 valign=bottom>&nbsp;<br>
+<font color="#ffffff" face="helvetica, arial"><big><strong>Data</strong></big></font></td></tr>
+    
+<tr><td bgcolor="#55aa55"><tt>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</tt></td><td>&nbsp;</td>
+<td width="100%"><strong>absolute_import</strong> = _Feature((2, 5, 0, 'alpha', 1), (3, 0, 0, 'alpha', 0), 16384)<br>
+<strong>division</strong> = _Feature((2, 2, 0, 'alpha', 2), (3, 0, 0, 'alpha', 0), 8192)<br>
+<strong>print_function</strong> = _Feature((2, 6, 0, 'alpha', 2), (3, 0, 0, 'alpha', 0), 65536)</td></tr></table>
+</body></html>

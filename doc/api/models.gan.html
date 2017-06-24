@@ -1,0 +1,112 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.0 Transitional//EN">
+<html><head><title>Python: module models.gan</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+</head><body bgcolor="#f0f0f8">
+
+<table width="100%" cellspacing=0 cellpadding=2 border=0 summary="heading">
+<tr bgcolor="#7799ee">
+<td valign=bottom>&nbsp;<br>
+<font color="#ffffff" face="helvetica, arial">&nbsp;<br><big><big><strong><a href="models.html"><font color="#ffffff">models</font></a>.gan</strong></big></big></font></td
+><td align=right valign=bottom
+><font color="#ffffff" face="helvetica, arial"><a href=".">index</a><br><a href="file:/mnt/research/projects/autoencoders/models/gan.py">/mnt/research/projects/autoencoders/models/gan.py</a></font></td></tr></table>
+    <p><tt>Implementation&nbsp;of&nbsp;Vanilla&nbsp;GAN,&nbsp;Wasserstein&nbsp;GAN,&nbsp;and&nbsp;Improved<br>
+Wasserstein&nbsp;GAN&nbsp;(denoted&nbsp;GAN,&nbsp;WGAN,&nbsp;and&nbsp;IWGAN,&nbsp;respectively).<br>
+&nbsp;<br>
+Which&nbsp;model&nbsp;is&nbsp;added&nbsp;to&nbsp;the&nbsp;graph&nbsp;is&nbsp;based&nbsp;on&nbsp;args.model&nbsp;('gan',<br>
+'wgan',&nbsp;or&nbsp;'iwgan'),&nbsp;along&nbsp;with&nbsp;the&nbsp;other&nbsp;associated&nbsp;arguments<br>
+(e.g.&nbsp;args.optimizer,&nbsp;args.latent_size,&nbsp;etc.)&nbsp;<br>
+&nbsp;<br>
+Supports&nbsp;multi-GPU&nbsp;training.<br>
+&nbsp;<br>
+Sources:<br>
+-------<br>
+-&nbsp;`Generative&nbsp;Adversarial&nbsp;Networks`<br>
+https://arxiv.org/abs/1406.2661<br>
+&nbsp;<br>
+-&nbsp;`Wasserstein&nbsp;GAN`<br>
+https://arxiv.org/abs/1701.07875<br>
+&nbsp;<br>
+-&nbsp;`Improved&nbsp;Training&nbsp;of&nbsp;Wasserstein&nbsp;GANs`<br>
+https://arxiv.org/abs/1704.00028</tt></p>
+<p>
+<table width="100%" cellspacing=0 cellpadding=2 border=0 summary="section">
+<tr bgcolor="#aa55cc">
+<td colspan=3 valign=bottom>&nbsp;<br>
+<font color="#ffffff" face="helvetica, arial"><big><strong>Modules</strong></big></font></td></tr>
+    
+<tr><td bgcolor="#aa55cc"><tt>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</tt></td><td>&nbsp;</td>
+<td width="100%"><table width="100%" summary="list"><tr><td width="25%" valign=top><a href="cv2.html">cv2</a><br>
+<a href="numpy.html">numpy</a><br>
+<a href="os.html">os</a><br>
+</td><td width="25%" valign=top><a href="pickle.html">pickle</a><br>
+<a href="re.html">re</a><br>
+<a href="shutil.html">shutil</a><br>
+</td><td width="25%" valign=top><a href="sys.html">sys</a><br>
+<a href="tensorflow.html">tensorflow</a><br>
+<a href="time.html">time</a><br>
+</td><td width="25%" valign=top></td></tr></table></td></tr></table><p>
+<table width="100%" cellspacing=0 cellpadding=2 border=0 summary="section">
+<tr bgcolor="#eeaa77">
+<td colspan=3 valign=bottom>&nbsp;<br>
+<font color="#ffffff" face="helvetica, arial"><big><strong>Functions</strong></big></font></td></tr>
+    
+<tr><td bgcolor="#eeaa77"><tt>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</tt></td><td>&nbsp;</td>
+<td width="100%"><dl><dt><a name="-discriminator"><strong>discriminator</strong></a>(x, args, reuse=False)</dt><dd><tt>Adds&nbsp;discriminator&nbsp;nodes&nbsp;to&nbsp;the&nbsp;graph.<br>
+&nbsp;<br>
+From&nbsp;the&nbsp;input&nbsp;image,&nbsp;successively&nbsp;applies&nbsp;convolutions&nbsp;with<br>
+striding&nbsp;to&nbsp;scale&nbsp;down&nbsp;layer&nbsp;sizes&nbsp;until&nbsp;we&nbsp;get&nbsp;to&nbsp;a&nbsp;single<br>
+output&nbsp;value,&nbsp;representing&nbsp;the&nbsp;discriminator's&nbsp;estimate&nbsp;of&nbsp;fake<br>
+vs&nbsp;real.&nbsp;The&nbsp;single&nbsp;final&nbsp;output&nbsp;acts&nbsp;similar&nbsp;to&nbsp;a&nbsp;sigmoid<br>
+activation&nbsp;function.<br>
+&nbsp;<br>
+Args:<br>
+x:&nbsp;Tensor,&nbsp;input.<br>
+args:&nbsp;Argparse&nbsp;structure.<br>
+reuse:&nbsp;Boolean,&nbsp;whether&nbsp;to&nbsp;reuse&nbsp;variables.<br>
+&nbsp;<br>
+Returns:<br>
+Final&nbsp;output&nbsp;of&nbsp;discriminator&nbsp;pipeline.</tt></dd></dl>
+ <dl><dt><a name="-generator"><strong>generator</strong></a>(batch_size, latent_size, args, reuse=False)</dt><dd><tt>Adds&nbsp;generator&nbsp;nodes&nbsp;to&nbsp;the&nbsp;graph.<br>
+&nbsp;<br>
+From&nbsp;noise,&nbsp;applies&nbsp;deconv2d&nbsp;until&nbsp;image&nbsp;is&nbsp;scaled&nbsp;up&nbsp;to&nbsp;match<br>
+the&nbsp;dataset.</tt></dd></dl>
+ <dl><dt><a name="-gradient_penalty"><strong>gradient_penalty</strong></a>(x, g, args)</dt><dd><tt>Calculate&nbsp;gradient&nbsp;penalty&nbsp;for&nbsp;discriminator.<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+This&nbsp;requires&nbsp;creating&nbsp;a&nbsp;separate&nbsp;discriminator&nbsp;path.<br>
+&nbsp;<br>
+Args:&nbsp;<br>
+x:&nbsp;Tensor,&nbsp;the&nbsp;real&nbsp;images.<br>
+g:&nbsp;Tensor,&nbsp;the&nbsp;fake&nbsp;images.<br>
+args:&nbsp;Argparse&nbsp;structure.</tt></dd></dl>
+ <dl><dt><a name="-losses"><strong>losses</strong></a>(x, g, d_fake, d_real, args)</dt><dd><tt>Add&nbsp;loss&nbsp;nodes&nbsp;to&nbsp;the&nbsp;graph&nbsp;depending&nbsp;on&nbsp;the&nbsp;model&nbsp;type.<br>
+&nbsp;<br>
+Args:<br>
+&nbsp;&nbsp;x:&nbsp;Tensor,&nbsp;real&nbsp;images.<br>
+&nbsp;&nbsp;g:&nbsp;Tensor,&nbsp;the&nbsp;generator.<br>
+&nbsp;&nbsp;d_fake:&nbsp;Tensor,&nbsp;the&nbsp;fake&nbsp;discriminator.<br>
+&nbsp;&nbsp;d_real:&nbsp;Tensor,&nbsp;the&nbsp;real&nbsp;discriminator.<br>
+&nbsp;&nbsp;args:&nbsp;Argparse&nbsp;structure.<br>
+&nbsp;<br>
+Returns:<br>
+&nbsp;&nbsp;g_loss:&nbsp;Tensor,&nbsp;the&nbsp;generator's&nbsp;loss&nbsp;function.<br>
+&nbsp;&nbsp;d_loss:&nbsp;Tensor,&nbsp;the&nbsp;discriminator's&nbsp;loss&nbsp;function.</tt></dd></dl>
+ <dl><dt><a name="-summaries"><strong>summaries</strong></a>(g, x, args)</dt><dd><tt>Adds&nbsp;histogram&nbsp;and&nbsp;montage&nbsp;summaries&nbsp;for&nbsp;real&nbsp;and&nbsp;fake&nbsp;examples.</tt></dd></dl>
+</td></tr></table><p>
+<table width="100%" cellspacing=0 cellpadding=2 border=0 summary="section">
+<tr bgcolor="#55aa55">
+<td colspan=3 valign=bottom>&nbsp;<br>
+<font color="#ffffff" face="helvetica, arial"><big><strong>Data</strong></big></font></td></tr>
+    
+<tr><td bgcolor="#55aa55"><tt>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</tt></td><td>&nbsp;</td>
+<td width="100%"><strong>BOLD</strong> = '<font color="#c040c0">\x1b</font>[1m'<br>
+<strong>ENDC</strong> = '<font color="#c040c0">\x1b</font>[0m'<br>
+<strong>FAIL</strong> = '<font color="#c040c0">\x1b</font>[91m'<br>
+<strong>HEADER</strong> = '<font color="#c040c0">\x1b</font>[95m'<br>
+<strong>OKBLUE</strong> = '<font color="#c040c0">\x1b</font>[94m'<br>
+<strong>OKGREEN</strong> = '<font color="#c040c0">\x1b</font>[92m'<br>
+<strong>UNDERLINE</strong> = '<font color="#c040c0">\x1b</font>[4m'<br>
+<strong>WARNING</strong> = '<font color="#c040c0">\x1b</font>[93m'<br>
+<strong>absolute_import</strong> = _Feature((2, 5, 0, 'alpha', 1), (3, 0, 0, 'alpha', 0), 16384)<br>
+<strong>division</strong> = _Feature((2, 2, 0, 'alpha', 2), (3, 0, 0, 'alpha', 0), 8192)<br>
+<strong>print_function</strong> = _Feature((2, 6, 0, 'alpha', 2), (3, 0, 0, 'alpha', 0), 65536)</td></tr></table>
+</body></html>
