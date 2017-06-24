@@ -16,7 +16,7 @@ from math import sqrt
 
 from util import * #tower_scope_range, average_gradients, init_optimizer, default_to_cpu, merge_all_summaries, default_training
 from ops.layers import dense, conv2d, deconv2d, flatten
-from ops.summaries import montage_summary, summarize_gradients
+from ops.summaries import montage_summary, summarize_gradients, summarize_activations, summarize_losses, summarize_weights_biases
 from ops.activations import lrelu
 
 
@@ -48,7 +48,7 @@ def vae(x, args):
     summarize_gradients(avg_grads)
     train_op = opt.apply_gradients(avg_grads, global_step=tf.train.get_global_step())
 
-    return default_training(train_op), merge_all_summaries()
+    return default_training(train_op)
 
 
 
@@ -59,28 +59,9 @@ def summaries(x, d_fake, d_real, args):
         montage_summary(x[0:args.examples], ne, ne, name='examples/inputs')
         montage_summary(d_real[0:args.examples], ne, ne, name='examples/real_decoded')
         montage_summary(d_fake[0:args.examples], ne, ne, name='examples/fake_decoded')
-    with tf.variable_scope('activations'):
-        for l in tf.get_collection('conv_layers'):
-            tf.summary.histogram(tensor_name(l), l)
-            tf.summary.scalar(tensor_name(l) + '/sparsity', tf.nn.zero_fraction(l))
-            montage_summary(tf.transpose(l[0], [2, 0, 1]), name=tensor_name(l) + '/montage')
-        for l in tf.get_collection('dense_layers'):
-            tf.summary.histogram(tensor_name(l), l)
-            tf.summary.scalar(tensor_name(l) + '/sparsity', tf.nn.zero_fraction(l))
-    with tf.variable_scope('loss'):
-        for l in tf.get_collection('losses'):
-            tf.summary.scalar(tensor_name(l), l)
-            tf.summary.histogram(tensor_name(l), l)
-    with tf.variable_scope('weights'):
-        for l in tf.get_collection('weights'):
-            tf.summary.histogram(tensor_name(l), l)
-            tf.summary.scalar(tensor_name(l) + '/sparsity', tf.nn.zero_fraction(l))
-            # montage_summary(l, name=tensor_name(l) + '/montage')
-    with tf.variable_scope('biases'):
-        for l in tf.get_collection('biases'):
-            tf.summary.histogram(tensor_name(l), l)
-            tf.summary.scalar(tensor_name(l) + '/sparsity', tf.nn.zero_fraction(l))    
-
+    summarize_activations()
+    summarize_losses()
+    summarize_weights_biases()
     
 def losses(x, z_mean, z_stddev, d_real):
     """Adds loss nodes to the graph.

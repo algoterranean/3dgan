@@ -53,7 +53,7 @@ if __name__ == '__main__':
     parser._action_groups.pop()
     model_args = parser.add_argument_group('Model')
     data_args = parser.add_argument_group('Data')
-    optimizer_args = parser.add_argument_group('Optimizer')    
+    optimizer_args = parser.add_argument_group('Optimizer')
     train_args = parser.add_argument_group('Training')
     misc_args = parser.add_argument_group('Miscellaneous')
     
@@ -201,15 +201,17 @@ if __name__ == '__main__':
         global_step = tf.Variable(0, trainable=False, name='global_step')
         global_epoch = tf.Variable(0, trainable=False, name='global_epoch')
         increment_global_epoch = tf.assign(global_epoch, global_epoch+1)
-        # # save the arguments to the graph
-        # with tf.variable_scope('args'):
-        #     for a in vars(args):
-        #         v = getattr(args, a)
-        #         if v is None:
-        #             v = False
-        #         tf.Variable(v, name=a, trainable=False)
-        #         print('    {} = {}'.format(a, v))
-
+        
+        # save options to disk for later reference
+        if not os.path.exists(args.dir):
+            os.makedirs(args.dir)
+        f = open(os.path.join(args.dir, 'options.config'), 'w')
+        for a in vars(args):
+            v = getattr(args, a)
+            f.write('{} {}\n'.format(a, v))
+            print('    {} = {}'.format(a, v))
+        f.close()
+            
 
     # input pipeline
     message('Initializing input pipeline...')
@@ -240,7 +242,9 @@ if __name__ == '__main__':
                    'iwgan': gan,
                    'vae'  : vae,
                    'cnn'  : cnn}
-    train_func, summary_op = model_funcs[args.model](x, args)
+    
+    train_func = model_funcs[args.model](x, args)
+    summary_op = merge_all_summaries()
 
     
     # supervisor
