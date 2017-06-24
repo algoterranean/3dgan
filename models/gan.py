@@ -28,7 +28,7 @@ import tensorflow as tf
 from tensorflow.contrib.layers import batch_norm
 from tensorflow.contrib.framework.python.ops.arg_scope import arg_scope
 
-from util import tower_scope_range, average_gradients, init_optimizer, default_to_cpu, merge_all_summaries
+from util import * #tower_scope_range, average_gradients, init_optimizer, default_to_cpu, merge_all_summaries
 from ops.layers import dense, conv2d, deconv2d, flatten
 from ops.activations import lrelu
 from ops.summaries import montage_summary, summarize_gradients
@@ -68,8 +68,9 @@ def gan(x, args):
         d_tower_grads.append(d_opt.compute_gradients(d_loss, var_list=d_params))
         # only need one batchnorm update (ends up being updates for last tower)
         batchnorm_updates = tf.get_collection(tf.GraphKeys.UPDATE_OPS, scope)
-        # summaries
-        summaries(g, x, args)
+        
+    # summaries
+    summaries(g, x, args)
         
     # average and apply gradients
     g_grads = average_gradients(g_tower_grads)
@@ -92,13 +93,37 @@ def gan(x, args):
 
 def summaries(g, x, args):
     """Adds histogram and montage summaries for real and fake examples."""
-    tf.summary.histogram('fakes', g)
-    tf.summary.histogram('real', x)
-    # need to rescale images from [-1,1] to [0,1]
-    real_examples = (x[0:args.examples] + 1.0) / 2
-    fake_examples = (g[0:args.examples] + 1.0) / 2
-    montage_summary(tf.reshape(real_examples, [-1, 64, 64, 3]), 8, 8, 'inputs')
-    montage_summary(tf.reshape(fake_examples, [-1, 64, 64, 3]), 8, 8, 'fake')
+    with tf.variable_scope('examples'):
+        tf.summary.histogram('fakes', g)
+        tf.summary.histogram('real', x)
+        with tf.variable_scope('rescale'):
+            # need to rescale images from [-1,1] to [0,1]
+            real_examples = (x[0:args.examples] + 1.0) / 2
+            fake_examples = (g[0:args.examples] + 1.0) / 2
+        montage_summary(tf.reshape(real_examples, [-1, 64, 64, 3]), 8, 8, 'inputs')
+        montage_summary(tf.reshape(fake_examples, [-1, 64, 64, 3]), 8, 8, 'fake')
+
+    with tf.variable_scope('activations'):
+        for l in tf.get_collection('conv_layers'):
+            tf.summary.histogram(tensor_name(l), l)
+            tf.summary.scalar(tensor_name(l) + '/sparsity', tf.nn.zero_fraction(l))
+            montage_summary(tf.transpose(l[0], [2, 0, 1]), name=tensor_name(l) + '/montage')
+        for l in tf.get_collection('dense_layers'):
+            tf.summary.histogram(tensor_name(l), l)
+            tf.summary.scalar(tensor_name(l) + '/sparsity', tf.nn.zero_fraction(l))
+    with tf.variable_scope('loss'):
+        for l in tf.get_collection('losses'):
+            tf.summary.scalar(tensor_name(l), l)
+            tf.summary.histogram(tensor_name(l), l)
+    with tf.variable_scope('weights'):
+        for l in tf.get_collection('weights'):
+            tf.summary.histogram(tensor_name(l), l)
+            tf.summary.scalar(tensor_name(l) + '/sparsity', tf.nn.zero_fraction(l))
+            # montage_summary(l, name=tensor_name(l) + '/montage')
+    with tf.variable_scope('biases'):
+        for l in tf.get_collection('biases'):
+            tf.summary.histogram(tensor_name(l), l)
+            tf.summary.scalar(tensor_name(l) + '/sparsity', tf.nn.zero_fraction(l))    
 
 
 def _train_gan(g_apply_grads, d_apply_grads, batchnorm_updates):
@@ -118,7 +143,7 @@ def _train_gan(g_apply_grads, d_apply_grads, batchnorm_updates):
     with tf.control_dependencies(batchnorm_updates):
         g_train_op = g_apply_grads
         d_train_op = d_apply_grads
-    losses = tf.get_collection('losses')
+    losses = collection_to_dict(tf.get_collection('losses'))
     def helper(sess, args):
         _, _, l = sess.run([d_train_op, g_train_op, losses])
         return l
@@ -140,7 +165,7 @@ def _train_wgan(g_apply_grads, g_params, d_apply_grads, d_params, batchnorm_upda
             d_train_op = d_apply_grads
         with tf.control_dependencies(clip_G):
             g_train_op = g_apply_grads
-    losses = tf.get_collection('losses')
+    losses = collection_to_dict(tf.get_collection('losses'))
     def helper(sess, args):
         for i in range(args.n_disc_train):
             sess.run(d_train_op)
@@ -159,7 +184,7 @@ def _train_iwgan(g_apply_grads, d_apply_grads, batchnorm_updates):
     g_train_op = g_apply_grads
     with tf.control_dependencies(batchnorm_updates):
         d_train_op = d_apply_grads
-    losses = tf.get_collection('losses')
+    losses = collection_to_dict(tf.get_collection('losses'))
     def helper(sess, args):
         for i in range(args.n_disc_train):
             sess.run(d_train_op)
@@ -191,14 +216,17 @@ def losses(x, g, d_fake, d_real, args):
         d_loss = tf.identity(tf.reduce_mean(d_fake) - tf.reduce_mean(d_real), name='d_loss')
     elif args.model == 'iwgan':
         l_term = 10.0
-        g_loss = -tf.reduce_mean(d_fake)
+        
+        g_loss = tf.identity(-tf.reduce_mean(d_fake), name='g_loss')
         with tf.variable_scope('discriminator'):
             gp = gradient_penalty(x, g, args)
         d_loss = tf.reduce_mean(d_fake) - tf.reduce_mean(d_real) + l_term * gp
+        d_loss = tf.identity(d_loss, name='d_loss')
+    
     tf.add_to_collection('losses', g_loss)
     tf.add_to_collection('losses', d_loss)
-    tf.summary.scalar('g_loss', g_loss)
-    tf.summary.scalar('d_loss', d_loss)
+    # tf.summary.scalar('g_loss', g_loss)
+    # tf.summary.scalar('d_loss', d_loss)
     return g_loss, d_loss
 
 
@@ -233,8 +261,7 @@ def generator(batch_size, latent_size, args, reuse=False):
     with arg_scope([dense, deconv2d],
                        reuse = reuse,
                        use_batch_norm = True,
-                       activation = tf.nn.relu,
-                       add_summaries = True):
+                       activation = tf.nn.relu):
         z = tf.random_normal([batch_size, latent_size])
         y = dense(z, latent_size, 4*4*4*latent_size, name='fc1')
         y = tf.reshape(y, [-1, 4, 4, 4*latent_size])
@@ -268,8 +295,7 @@ def discriminator(x, args, reuse=False):
     with arg_scope([conv2d],
                        use_batch_norm = use_bn,
                        activation = lrelu,
-                       reuse = reuse,
-                       add_summaries = True):
+                       reuse = reuse):
         x = tf.reshape(x, [-1, 64, 64, 3])
         x = conv2d(x, 3, args.latent_size, 5, 2, name='c1', use_batch_norm=False)
         x = conv2d(x, args.latent_size, args.latent_size*2, 5, 2, name='c2')

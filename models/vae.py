@@ -14,7 +14,7 @@ import tensorflow as tf
 from tensorflow.contrib.framework.python.ops.arg_scope import arg_scope
 from math import sqrt
 
-from util import tower_scope_range, average_gradients, init_optimizer, default_to_cpu, merge_all_summaries, default_training
+from util import * #tower_scope_range, average_gradients, init_optimizer, default_to_cpu, merge_all_summaries, default_training
 from ops.layers import dense, conv2d, deconv2d, flatten
 from ops.summaries import montage_summary, summarize_gradients
 from ops.activations import lrelu
@@ -37,10 +37,11 @@ def vae(x, args):
             d_fake = decoder(samples, args.latent_size, reuse=True)
         # losses
         d_loss, l_loss, t_loss = losses(x, z_mean, z_stddev, d_real)
-        # summaries
-        summaries(x, d_fake, d_real, args)
         # gradients
         tower_grads.append(opt.compute_gradients(d_loss))
+
+    # summaries
+    summaries(x, d_fake, d_real, args)
 
     # training
     avg_grads = average_gradients(tower_grads)
@@ -53,10 +54,32 @@ def vae(x, args):
 
 def summaries(x, d_fake, d_real, args):
     """Add montage summaries for examples and samples."""
-    ne = int(sqrt(args.examples))
-    montage_summary(x[0:args.examples], ne, ne, name='examples/inputs')
-    montage_summary(d_real[0:args.examples], ne, ne, name='examples/real_decoded')
-    montage_summary(d_fake[0:args.examples], ne, ne, name='examples/fake_decoded')
+    with tf.variable_scope('examples'):
+        ne = int(sqrt(args.examples))
+        montage_summary(x[0:args.examples], ne, ne, name='examples/inputs')
+        montage_summary(d_real[0:args.examples], ne, ne, name='examples/real_decoded')
+        montage_summary(d_fake[0:args.examples], ne, ne, name='examples/fake_decoded')
+    with tf.variable_scope('activations'):
+        for l in tf.get_collection('conv_layers'):
+            tf.summary.histogram(tensor_name(l), l)
+            tf.summary.scalar(tensor_name(l) + '/sparsity', tf.nn.zero_fraction(l))
+            montage_summary(tf.transpose(l[0], [2, 0, 1]), name=tensor_name(l) + '/montage')
+        for l in tf.get_collection('dense_layers'):
+            tf.summary.histogram(tensor_name(l), l)
+            tf.summary.scalar(tensor_name(l) + '/sparsity', tf.nn.zero_fraction(l))
+    with tf.variable_scope('loss'):
+        for l in tf.get_collection('losses'):
+            tf.summary.scalar(tensor_name(l), l)
+            tf.summary.histogram(tensor_name(l), l)
+    with tf.variable_scope('weights'):
+        for l in tf.get_collection('weights'):
+            tf.summary.histogram(tensor_name(l), l)
+            tf.summary.scalar(tensor_name(l) + '/sparsity', tf.nn.zero_fraction(l))
+            # montage_summary(l, name=tensor_name(l) + '/montage')
+    with tf.variable_scope('biases'):
+        for l in tf.get_collection('biases'):
+            tf.summary.histogram(tensor_name(l), l)
+            tf.summary.scalar(tensor_name(l) + '/sparsity', tf.nn.zero_fraction(l))    
 
     
 def losses(x, z_mean, z_stddev, d_real):
@@ -96,8 +119,7 @@ def encoder(x, reuse=False):
     with arg_scope([conv2d],
                        reuse = reuse,
                        activation = lrelu,
-                       use_batch_norm = True,
-                       add_summaries = True):
+                       use_batch_norm = True):
         x = conv2d(x, 3, 64, 5, 2, name='c1')
         x = conv2d(x, 64, 128, 5, 2, name='c2')
         x = conv2d(x, 128, 256, 5, 2, name='c3')
@@ -136,8 +158,7 @@ def decoder(x, latent_size, reuse=False):
     """
     with arg_scope([dense, conv2d, deconv2d],
                        activation = tf.nn.relu,
-                       reuse = reuse,
-                       add_summaries = True):
+                       reuse = reuse):
         x = dense(x, latent_size, 32*4*4, name='d1')
         x = tf.reshape(x, [-1, 4, 4, 32])
         x = conv2d(x, 32, 96, 1, name='c1')

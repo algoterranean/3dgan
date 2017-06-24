@@ -196,10 +196,12 @@ def collection_to_dict(collection):
 def format_for_terminal(results, prev_results):
     if not prev_results:
         disp_results = results
+        for k in disp_results:
+            disp_results[k] = '{:3f}'.format(disp_results[k])
     else:
         disp_results = {}
         for k in prev_results:
-            diff = results[k] - prev_results[k]
+            diff = float(results[k]) - float(prev_results[k])
             if diff > 0:
                 sym = '+'
             elif diff < 0:
@@ -208,7 +210,6 @@ def format_for_terminal(results, prev_results):
                 sym = '~'
             disp_results[k] = '{:3f}({})'.format(results[k], sym)
     return disp_results
-    
         
 
 # def print_progress(iterations, max_iterations, loss_dict, start_time):
