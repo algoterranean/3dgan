@@ -20,6 +20,7 @@ from data import get_dataset
 from models.cnn import cnn
 from models.gan import gan
 from models.vae import vae
+from models.cgan import cgan
 
 
 class load_args_from_file(argparse.Action):
@@ -240,6 +241,7 @@ if __name__ == '__main__':
     model_funcs = {'gan'  : gan,
                    'wgan' : gan,
                    'iwgan': gan,
+                   'cgan' : cgan,
                    'vae'  : vae,
                    'cnn'  : cnn}
     
