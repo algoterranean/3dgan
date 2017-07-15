@@ -21,6 +21,7 @@ from util import * #tower_scope_range, average_gradients, init_optimizer, defaul
 from ops.layers import dense, conv2d, deconv2d, flatten
 from ops.activations import lrelu
 from ops.summaries import montage_summary, summarize_gradients, summarize_activations, summarize_losses, summarize_weights_biases
+from ops.images import colorize
 
 
 
@@ -43,13 +44,13 @@ def cgan(x, args):
         with tf.variable_scope('generator'):
             e = encoder(x[:,:,:,0:3], reuse=(gpu_id>0))
             d = decoder(e, args.latent_size, args.batch_size, reuse=(gpu_id>0))
-            g = tf.concat((x[:,:,:,0:3], d), axis=3)
+            g = tf.concat((x[:,:,:,0:3], d), axis=-1)
             # g = generator(x[:,:,:,0:3], args.batch_size, args.latent_size, args, reuse=(gpu_id>0))
         with tf.variable_scope('discriminator'):
             d_real = discriminator(x, args, reuse=(gpu_id>0))
             d_fake = discriminator(g, args, reuse=True)
         # losses
-        g_loss, d_loss = losses(x, g, d_fake, d_real, args)
+        g_loss, d_loss = losses(x, g, d_fake, d_real, args, reuse=(gpu_id>0))
         # compute gradients
         g_params = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, 'generator')
         d_params = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, 'discriminator')
@@ -83,20 +84,25 @@ def summaries(g, x, args):
         tf.summary.histogram('real', x)
         with tf.variable_scope('rescale'):
             # need to rescale images from [-1,1] to [0,1]
-            real_examples = (x[0:args.examples] + 1.0) / 2
-            fake_examples = (g[0:args.examples] + 1.0) / 2
-        montage_summary(tf.reshape(real_examples[:,:,:,0:3], [-1, 64, 64, 3]), 8, 8, 'input_images')
-        montage_summary(tf.reshape(real_examples[:,:,:,3], [-1, 64, 64, 1]), 8, 8, 'input_depths')
-        montage_summary(tf.reshape(fake_examples[:,:,:,0:3], [-1, 64, 64, 3]), 8, 8, 'fake_images')
-        montage_summary(tf.reshape(fake_examples[:,:,:,3], [-1, 64, 64, 1]), 8, 8, 'fake_depths')
-        tf.summary.histogram('real_red_values', x[:,:,:,0])
-        tf.summary.histogram('real_green_values', x[:,:,:,1])
-        tf.summary.histogram('real_blue_values', x[:,:,:,2])
-        tf.summary.histogram('real_depth_values', x[:,:,:,3])
-        tf.summary.histogram('fake_red_values', g[:,:,:,0])
-        tf.summary.histogram('fake_green_values', g[:,:,:,1])
-        tf.summary.histogram('fake_blue_values', g[:,:,:,2])
-        tf.summary.histogram('fake_depth_values', g[:,:,:,3])
+            real_examples = tf.reshape((x[0:args.examples] + 1.0) / 2, [-1, 64, 64, 4])
+            fake_examples = tf.reshape((g[0:args.examples] + 1.0) / 2, [-1, 64, 64, 4])
+            real_images = real_examples[:,:,:,0:3]
+            real_depths = real_examples[:,:,:,3]
+            fake_images = fake_examples[:,:,:,0:3]
+            fake_depths = fake_examples[:,:,:,3]
+
+            fake_depths = colorize(fake_depths)
+            real_depths = colorize(real_depths)
+            
+        montage_summary(real_images, 8, 8, 'input_images')
+        montage_summary(real_depths, 8, 8, 'input_depths')
+        montage_summary(fake_images, 8, 8, 'fake_images')
+        montage_summary(fake_depths, 8, 8, 'fake_depths')
+        
+        # montage_summary(tf.reshape(real_examples[:,:,:,0:3], [-1, 64, 64, 3]), 8, 8, 'input_images')
+        # montage_summary(tf.reshape(real_examples[:,:,:,3], [-1, 64, 64, 1]), 8, 8, 'input_depths')
+        # montage_summary(tf.reshape(fake_examples[:,:,:,0:3], [-1, 64, 64, 3]), 8, 8, 'fake_images')
+        # montage_summary(tf.reshape(fake_examples[:,:,:,3], [-1, 64, 64, 1]), 8, 8, 'fake_depths')
     summarize_activations()
     summarize_losses()
     summarize_weights_biases()
@@ -122,7 +128,7 @@ def _train_cgan(g_apply_grads, d_apply_grads, batchnorm_updates):
     return helper
 
         
-def losses(x, g, d_fake, d_real, args):
+def losses(x, g, d_fake, d_real, args, reuse=False):
     """Add loss nodes to the graph depending on the model type.
 
     Args:
@@ -136,19 +142,21 @@ def losses(x, g, d_fake, d_real, args):
       g_loss: Tensor, the generator's loss function.
       d_loss: Tensor, the discriminator's loss function.
     """
-    l_term = 10.0
+
     rmse_loss = tf.sqrt(tf.reduce_mean(tf.square((x[:,:,:,3]+1.0)/2.0 - (g[:,:,:,3]+1.0)/2.0)), name='rmse_loss')
     g_loss = tf.identity(-tf.reduce_mean(d_fake) + rmse_loss, name='g_loss')
+    
+    l_term = 10.0    
     with tf.variable_scope('discriminator'):
         gp = gradient_penalty(x, g, args)
     d_loss = tf.reduce_mean(d_fake) - tf.reduce_mean(d_real) + l_term * gp
     d_loss = tf.identity(d_loss, name='d_loss')
     
     # rmse_loss = tf.sqrt(tf.reduce_mean(tf.square((x[:,:,:,3]+1.0)/2.0 - (g[:,:,:,3]+1.0)/2.0)), name='rmse_loss')
-    
-    tf.add_to_collection('losses', g_loss)
-    tf.add_to_collection('losses', d_loss)
-    tf.add_to_collection('losses', rmse_loss)
+    if not reuse:
+        tf.add_to_collection('losses', g_loss)
+        tf.add_to_collection('losses', d_loss)
+        tf.add_to_collection('losses', rmse_loss)
     return g_loss, d_loss
 
 
@@ -186,12 +194,13 @@ def encoder(x, reuse=False):
     with arg_scope([conv2d],
                        reuse = reuse,
                        activation = lrelu):
-        x = conv2d(x,   3,  64, 5, 2, name='e_c1')
-        x = conv2d(x,  64, 128, 5, 2, name='e_c2')
-        x = conv2d(x, 128, 256, 5, 2, name='e_c3')
-        x = conv2d(x, 256, 256, 5, 2, name='e_c4')
-        x = conv2d(x, 256,  96, 1,    name='e_c5')
-        x = conv2d(x,  96,  32, 1,    name='e_c6')
+        # input = 64x64x3
+        x = conv2d(x,   3,  64, 5, 2, name='e_c1')  # output = 32x32x64
+        x = conv2d(x,  64, 128, 5, 2, name='e_c2')  # output = 16x16x128
+        x = conv2d(x, 128, 256, 5, 2, name='e_c3')  # output = 8x8x256
+        x = conv2d(x, 256, 256, 5, 2, name='e_c4')  # output = 4x4x256
+        x = conv2d(x, 256,  96, 1,    name='e_c5')  # output = 4x4x96
+        x = conv2d(x,  96,  32, 1,    name='e_c6')  # output = 4x4x32
     return x
 
 
@@ -203,6 +212,8 @@ def decoder(x, latent_size, batch_size, reuse=False):
       latent_size: Integer, size of latent vector.
       reuse: Boolean, whether to reuse variables.
     """
+    e_layers = tf.get_collection('conv_layers')
+    
     with arg_scope([dense, conv2d, deconv2d],
                        reuse = reuse,
                        activation = tf.nn.relu):
@@ -210,12 +221,19 @@ def decoder(x, latent_size, batch_size, reuse=False):
         # x = dense(x, 32*4*4, latent_size, name='d_d1')
         # x = dense(x, latent_size, 32*4*4, name='d_d2')
         # x = tf.reshape(x, [-1, 4, 4, 32]) # un-flatten
-        x = conv2d(x,    32,  96, 1,    name='d_c1')
-        x = conv2d(x,    96, 256, 1,    name='d_c2')
-        x = deconv2d(x, 256, 256, 5, 2, name='d_dc1')
-        x = deconv2d(x, 256, 128, 5, 2, name='d_dc2')
-        x = deconv2d(x, 128,  64, 5, 2, name='d_dc3')
-        x = deconv2d(x,  64,   1, 5, 2, name='d_dc4', activation=tf.nn.tanh)
+
+        # input = 4x4x32
+        x = conv2d(x,    32,  96, 1,    name='d_c1')    # output = 4x4x96     + e_c5
+        x = tf.concat((x, e_layers[4]), axis=-1)
+        x = conv2d(x,    96*2, 256, 1,    name='d_c2')    # output = 4x4x256    + e_c4
+        x = tf.concat((x, e_layers[3]), axis=-1)
+        x = deconv2d(x, 256*2, 256, 5, 2, name='d_dc1')   # output = 8x8x256    + e_c3
+        x = tf.concat((x, e_layers[2]), axis=-1)
+        x = deconv2d(x, 256*2, 128, 5, 2, name='d_dc2')   # output = 16x16x128  + e_c2
+        x = tf.concat((x, e_layers[1]), axis=-1)
+        x = deconv2d(x, 128*2,  64, 5, 2, name='d_dc3')   # output = 32x32x64   + e_c1
+        x = tf.concat((x, e_layers[0]), axis=-1)
+        x = deconv2d(x,  64*2,   1, 5, 2, name='d_dc4', activation=tf.nn.tanh)  # output = 64x64x1
     return x
 
 

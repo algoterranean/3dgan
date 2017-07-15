@@ -18,6 +18,14 @@ import re
 from ops.input import batch_slice
 
 
+def get_collection_dict(name):
+    c = tf.get_collection(name)
+    d = {}
+    for x in c:
+        d[x.name] = x
+        # print('name', x.op.name)
+    return d
+
 
 def default_training(train_op):
     """Trainining function that just runs an op (or list of ops)."""

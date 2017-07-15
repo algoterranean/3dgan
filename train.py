@@ -1,3 +1,5 @@
+#!/usr/bin/python
+
 import os
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'     # only log errors
 import tensorflow as tf
@@ -268,67 +270,73 @@ if __name__ == '__main__':
     
 
         
+
+
     
     # training
     ######################################################################
     session_config = tf.ConfigProto(allow_soft_placement=True)
-    with sv.managed_session(config=session_config) as sess:
-        # initialize
-        start_time = time.time()
-        save_path = os.path.join(args.dir, 'checkpoint')
-        current_step = int(sess.run(global_step))
-        current_epoch = int(sess.run(global_epoch))
-        if args.epochs[0] == '+':
-            max_epochs = current_epoch + int(args.epochs[1:])
-        else:
-            max_epochs = int(args.epochs)
-        status = None
-
-        sess.run(x_init)        
-
-        # save model params before any training has been done
-        if current_step == 0:
-            message('Generating baseline summaries and checkpoint...')
-            # sess.run(x_init)
-            sv.saver.save(sess, save_path=save_path, global_step=global_step)
-            sv.summary_computed(sess, sess.run(summary_op))
-            
-        message('Starting training...')
-        for epoch in range(current_epoch, max_epochs):
-            # sess.run(x_init)
-            # -1 to save 1 batch for summaries at end
-            pbar = tqdm(range(iter_per_epoch), desc='Epoch {:3d}'.format(epoch+1), unit='batch')
-            
-            for i in pbar:
-                if sv.should_stop():
-                    print('stopping1')
-                    break
-                else:
-                    # train and display status
-                    prev_status = status
-                    status = train_func(sess, args)
-                    pbar.set_postfix(format_for_terminal(status, prev_status))
-
-                    # record 10 extra summaries (per epoch) in the first 3 epochs
-                    if epoch < 3 and i % int((iter_per_epoch / 10)) == 0:
-                        sv.summary_computed(sess, sess.run(summary_op))
-                        
-                    # # and record a summary half-way through each epoch after that
-                    elif epoch >= 3 and i % int((iter_per_epoch / 2)) == 0:
-                        sv.summary_computed(sess, sess.run(summary_op))
-                        
-            if sv.should_stop():
-                print('stopping2')
-                break
-
-            sess.run(increment_global_epoch)
-            # sess.run(tf.assign(global_epoch, global_epoch+1))
+    try:
+        with sv.managed_session(config=session_config) as sess:
+            # initialize
+            start_time = time.time()
+            save_path = os.path.join(args.dir, 'checkpoint')
+            current_step = int(sess.run(global_step))
             current_epoch = int(sess.run(global_epoch))
-            # print('completed epoch {}'.format(current_epoch))
+            if args.epochs[0] == '+':
+                max_epochs = current_epoch + int(args.epochs[1:])
+            else:
+                max_epochs = int(args.epochs)
+            status = None
 
-            # generate summaries and checkpoint
-            sv.summary_computed(sess, sess.run(summary_op))
-            sv.saver.save(sess, save_path=save_path, global_step=global_epoch)
-            # print('generated summaries and checkpoint')
+            sess.run(x_init)        
+
+            # save model params before any training has been done
+            if current_step == 0:
+                message('Generating baseline summaries and checkpoint...')
+                # sess.run(x_init)
+                sv.saver.save(sess, save_path=save_path, global_step=global_step)
+                sv.summary_computed(sess, sess.run(summary_op))
+            
+            message('Starting training...')
+            for epoch in range(current_epoch, max_epochs):
+                # sess.run(x_init)
+                # -1 to save 1 batch for summaries at end
+                pbar = tqdm(range(iter_per_epoch), desc='Epoch {:3d}'.format(epoch+1), unit='batch')
+            
+                for i in pbar:
+                    if sv.should_stop():
+                        print('stopping1')
+                        break
+                    else:
+                        # train and display status
+                        prev_status = status
+                        status = train_func(sess, args)
+                        pbar.set_postfix(format_for_terminal(status, prev_status))
+
+                        # record 10 extra summaries (per epoch) in the first 3 epochs
+                        if epoch < 3 and i % int((iter_per_epoch / 10)) == 0:
+                            sv.summary_computed(sess, sess.run(summary_op))
+                        # # and record a summary half-way through each epoch after that
+                        elif epoch >= 3 and i % int((iter_per_epoch / 2)) == 0:
+                            sv.summary_computed(sess, sess.run(summary_op))
+                        
+                if sv.should_stop():
+                    print('stopping2')
+                    break
+
+                sess.run(increment_global_epoch)
+                # sess.run(tf.assign(global_epoch, global_epoch+1))
+                current_epoch = int(sess.run(global_epoch))
+                # print('completed epoch {}'.format(current_epoch))
+
+                # generate summaries and checkpoint
+                sv.summary_computed(sess, sess.run(summary_op))
+                sv.saver.save(sess, save_path=save_path, global_step=global_epoch)
+                # print('generated summaries and checkpoint')
+    except Exception as e:
+        print('Caught unexpected exception during training:', e, e.message)
+        sys.exit(-1)
             
     message('\nTraining complete! Elapsed time: {}s'.format(int(time.time() - start_time)))
+    sys.exit(1)
