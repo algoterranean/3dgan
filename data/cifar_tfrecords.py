@@ -32,7 +32,9 @@ def generate_dataset(name, filenames):
             example = tf.train.Example(features=tf.train.Features(feature={'image': _bytes_feature(img_string)}))
             writer.write(example.SerializeToString())
         
-generate_dataset('train', ['data_batch_1', 'data_batch_2', 'data_batch_3', 'data_batch_4', 'data_batch_5'])
-generate_dataset('test', ['test_batch'])
+
+if __name__ == '__main__':
+    generate_dataset('train', ['data_batch_1', 'data_batch_2', 'data_batch_3', 'data_batch_4', 'data_batch_5'])
+    generate_dataset('test', ['test_batch'])
 
 

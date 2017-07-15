@@ -42,8 +42,8 @@ def generate_dataset(name, filename):
                 'filename': _bytes_feature(tf.compat.as_bytes(fn))}))
         writer.write(example.SerializeToString())
         
-    
-generate_dataset('train', 'train_set.txt')
-generate_dataset('test', 'test_set.txt')
-generate_dataset('validate', 'validation_set.txt')
+if __name__ == '__main__':
+    generate_dataset('train', 'train_set.txt')
+    generate_dataset('test', 'test_set.txt')
+    generate_dataset('validate', 'validation_set.txt')
 

@@ -28,21 +28,8 @@ def generate_dataset(name, filename):
         with tf.gfile.FastGFile(fdn, 'rb') as f:
             depth_data = f.read()
 
-        # depth_data = cv2.imread(fdn, cv2.IMREAD_UNCHANGED).astype(np.float32)
-        # print(depth_data.min(), depth_data.max())
-        # depth_data = np.divide(depth_data, np.iinfo(np.uint16).max)
-        # print(depth_data.min(), depth_data.max())
-
         w, h, c = 427, 561, 3
             
-        # # determine shape
-        # f = open(fn, 'rb')
-        # stuff = f.read()
-        # f.close()
-        # nparr = np.fromstring(stuff, np.uint8)
-        # i = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
-        # w, h, c = i.shape
-        
         # write record
         example = tf.train.Example(features=tf.train.Features(
             feature={
@@ -56,8 +43,9 @@ def generate_dataset(name, filename):
                 }))
         writer.write(example.SerializeToString())
         
-    
-# generate_dataset('train', 'train.txt')
-# generate_dataset('test', 'test.txt')
-generate_dataset('validate', 'validation.txt')
+
+if __name__ == '__main__':
+    generate_dataset('train', 'train.txt')
+    generate_dataset('test', 'test.txt')
+    generate_dataset('validate', 'validation.txt')
 
