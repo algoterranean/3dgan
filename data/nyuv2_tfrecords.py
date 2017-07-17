@@ -49,3 +49,7 @@ if __name__ == '__main__':
     generate_dataset('test', 'test.txt')
     generate_dataset('validate', 'validation.txt')
 
+    # fn = 'nyuv2.test.tfrecords'
+    # c = sum([1 for r in tf.python_io.tf_record_iterator(fn)])
+    # print('nyuv2 test:', c)    
+

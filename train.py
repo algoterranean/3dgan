@@ -18,7 +18,8 @@ from sys import stdout
 from os import path
 
 from util import *
-from data import get_dataset
+import data
+# from data import get_dataset
 from models.cnn import cnn
 from models.gan import gan
 from models.vae import vae
@@ -219,12 +220,25 @@ if __name__ == '__main__':
     # input pipeline
     message('Initializing input pipeline...')
     with tf.variable_scope('input_pipeline'):
-        x, x_init, x_count = get_dataset(args)
-        # x, x_count = get_dataset(args)
+        # TODO: move bulk of this to data.py
+        x_train, x_train_init, x_train_count = data.get_dataset(args, data.TRAIN)
+        x_validate, x_validate_init, x_validate_count = data.get_dataset(args, data.VALIDATE)
+        x_test, x_test_init, x_test_count = data.get_dataset(args, data.TEST)
+        
+        train_phase = tf.placeholder(dtype=tf.int32, shape=())
+        x = tf.case([(tf.equal(train_phase, data.TRAIN), lambda:x_train),
+                         (tf.equal(train_phase, data.VALIDATE), lambda:x_validate),
+                         (tf.equal(train_phase, data.TEST), lambda:x_test)], default=lambda:x_train)
+        x_init = tf.case([(tf.equal(train_phase, data.TRAIN), lambda:x_train_init),
+                              (tf.equal(train_phase, data.VALIDATE), lambda:x_validate_init),
+                              (tf.equal(train_phase, data.TEST), lambda:x_test_init)], default=lambda:x_train_init)
+
         if args.epoch_size <= 0:
-            iter_per_epoch = int(x_count / (args.batch_size * args.n_gpus))
+            iter_per_epoch = int(x_train_count / (args.batch_size * args.n_gpus))
         else:
             iter_per_epoch = args.epoch_size
+        validate_iter_per_epoch = int(x_validate_count / (args.batch_size * args.n_gpus))
+        test_iter_per_epoch = int(x_test_count / (args.batch_size * args.n_gpus))
 
         if args.resize:
             message('    Resizing images to {}.'.format(args.resize))
@@ -269,10 +283,11 @@ if __name__ == '__main__':
     run_metadata = tf.RunMetadata() if args.profile else None
     
 
-        
+    # enable_training = tf.assign(am_training, True)
+    # enable_validation = tf.assign(am_training, False)
 
 
-    
+
     # training
     ######################################################################
     session_config = tf.ConfigProto(allow_soft_placement=True)
@@ -283,27 +298,30 @@ if __name__ == '__main__':
             save_path = os.path.join(args.dir, 'checkpoint')
             current_step = int(sess.run(global_step))
             current_epoch = int(sess.run(global_epoch))
+
+            # set to training mode
+            # sess.run(enable_training)
+
+            
             if args.epochs[0] == '+':
                 max_epochs = current_epoch + int(args.epochs[1:])
             else:
                 max_epochs = int(args.epochs)
             status = None
+            sess.run(x_init, feed_dict={train_phase: data.TRAIN})
+            sess.run(x_init, feed_dict={train_phase: data.VALIDATE})
 
-            sess.run(x_init)        
-
+            
             # save model params before any training has been done
             if current_step == 0:
                 message('Generating baseline summaries and checkpoint...')
-                # sess.run(x_init)
                 sv.saver.save(sess, save_path=save_path, global_step=global_step)
-                sv.summary_computed(sess, sess.run(summary_op))
-            
+                sv.summary_computed(sess, sess.run(summary_op, feed_dict={train_phase: data.TRAIN}))
+
             message('Starting training...')
             for epoch in range(current_epoch, max_epochs):
-                # sess.run(x_init)
-                # -1 to save 1 batch for summaries at end
                 pbar = tqdm(range(iter_per_epoch), desc='Epoch {:3d}'.format(epoch+1), unit='batch')
-            
+                running_total = None
                 for i in pbar:
                     if sv.should_stop():
                         print('stopping1')
@@ -311,29 +329,67 @@ if __name__ == '__main__':
                     else:
                         # train and display status
                         prev_status = status
-                        status = train_func(sess, args)
-                        pbar.set_postfix(format_for_terminal(status, prev_status))
+                        status = train_func(sess, args, train_phase)
+                        # calculate cumulative moving average
+                        if running_total is None:
+                            running_total = status
+                        else:
+                            for r in running_total:
+                                running_total[r] = (float(status[r]) + i * float(running_total[r])) / (i+1)
+                        pbar.set_postfix(format_for_terminal(running_total))
+                        # pbar.set_postfix(format_for_terminal(status, prev_status))
 
                         # record 10 extra summaries (per epoch) in the first 3 epochs
                         if epoch < 3 and i % int((iter_per_epoch / 10)) == 0:
-                            sv.summary_computed(sess, sess.run(summary_op))
+                            sv.summary_computed(sess, sess.run(summary_op, feed_dict={train_phase: data.TRAIN}))
                         # # and record a summary half-way through each epoch after that
                         elif epoch >= 3 and i % int((iter_per_epoch / 2)) == 0:
-                            sv.summary_computed(sess, sess.run(summary_op))
+                            sv.summary_computed(sess, sess.run(summary_op, feed_dict={train_phase: data.TRAIN}))
                         
                 if sv.should_stop():
                     print('stopping2')
                     break
 
                 sess.run(increment_global_epoch)
-                # sess.run(tf.assign(global_epoch, global_epoch+1))
                 current_epoch = int(sess.run(global_epoch))
                 # print('completed epoch {}'.format(current_epoch))
 
                 # generate summaries and checkpoint
-                sv.summary_computed(sess, sess.run(summary_op))
+                sv.summary_computed(sess, sess.run(summary_op, feed_dict={train_phase: data.TRAIN}))
                 sv.saver.save(sess, save_path=save_path, global_step=global_epoch)
+
+                
+                # validate
+                vpbar = tqdm(range(validate_iter_per_epoch), desc='Validation', unit='batch')
+                running_total = None
+                losses = collection_to_dict(tf.get_collection('losses'))                
+                for i in vpbar:
+                    status = sess.run(losses, feed_dict={train_phase: data.VALIDATE})
+                    # calculate cumulative moving average
+                    if running_total is None:
+                        running_total = status
+                    else:
+                        for r in running_total:
+                            running_total[r] = (float(status[r]) + i * float(running_total[r])) / (i+1)
+                    vpbar.set_postfix(format_for_terminal(running_total))
+                
                 # print('generated summaries and checkpoint')
+
+            # test
+            running_total = None
+            tpbar = tqdm(range(test_iter_per_epoch), desc='Test', unit='batch')
+            running_total = None
+            losses = collection_to_dict(tf.get_collection('losses'))
+            for i in tpbar:
+                status = sess.run(losses, feed_dict={train_phase: data.TEST})
+                # calculate cumulative moving average
+                if running_total is None:
+                    running_total = status
+                else:
+                    for r in running_total:
+                        running_total[r] = (float(status[r]) + i * float(running_total[r])) / (i+1)
+                tpbar.set_postfix(format_for_terminal(running_total))
+
     except Exception as e:
         print('Caught unexpected exception during training:', e, e.message)
         sys.exit(-1)

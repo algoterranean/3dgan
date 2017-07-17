@@ -36,5 +36,10 @@ def generate_dataset(name, filenames):
 if __name__ == '__main__':
     generate_dataset('train', ['data_batch_1', 'data_batch_2', 'data_batch_3', 'data_batch_4', 'data_batch_5'])
     generate_dataset('test', ['test_batch'])
+    
+    # fn = 'cifar.train.tfrecords'
+    # c = sum([1 for r in tf.python_io.tf_record_iterator(fn)])
+    # print('cifar10 train:', c)
+
 
 

@@ -201,23 +201,31 @@ def collection_to_dict(collection):
     return d
 
 
-def format_for_terminal(results, prev_results):
-    if not prev_results:
-        disp_results = results
-        for k in disp_results:
-            disp_results[k] = '{:3f}'.format(disp_results[k])
-    else:
-        disp_results = {}
-        for k in prev_results:
-            diff = float(results[k]) - float(prev_results[k])
-            if diff > 0:
-                sym = '+'
-            elif diff < 0:
-                sym = '-'
-            else:
-                sym = '~'
-            disp_results[k] = '{:3f}({})'.format(results[k], sym)
-    return disp_results
+
+def format_for_terminal(results):
+    formatted_results = results
+    for k in results:
+        formatted_results[k] = '{:3f}'.format(results[k])
+    return formatted_results
+
+
+# def format_for_terminal(results, prev_results):
+#     if not prev_results:
+#         disp_results = results
+#         for k in disp_results:
+#             disp_results[k] = '{:3f}'.format(disp_results[k])
+#     else:
+#         disp_results = {}
+#         for k in prev_results:
+#             diff = float(results[k]) - float(prev_results[k])
+#             if diff > 0:
+#                 sym = '+'
+#             elif diff < 0:
+#                 sym = '-'
+#             else:
+#                 sym = '~'
+#             disp_results[k] = '{:3f}({})'.format(results[k], sym)
+#     return disp_results
         
 
 # def print_progress(iterations, max_iterations, loss_dict, start_time):

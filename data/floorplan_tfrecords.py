@@ -43,7 +43,11 @@ def generate_dataset(name, filename):
         writer.write(example.SerializeToString())
         
 if __name__ == '__main__':
-    generate_dataset('train', 'train_set.txt')
-    generate_dataset('test', 'test_set.txt')
-    generate_dataset('validate', 'validation_set.txt')
+    # generate_dataset('train', 'train_set.txt')
+    # generate_dataset('test', 'test_set.txt')
+    # generate_dataset('validate', 'validation_set.txt')    
+    fn = 'floorplans.test.tfrecords'
+    c = sum([1 for r in tf.python_io.tf_record_iterator(fn)])
+    print('floorplans test:', c)    
+
 

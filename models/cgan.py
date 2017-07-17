@@ -22,6 +22,7 @@ from ops.layers import dense, conv2d, deconv2d, flatten
 from ops.activations import lrelu
 from ops.summaries import montage_summary, summarize_gradients, summarize_activations, summarize_losses, summarize_weights_biases
 from ops.images import colorize
+import data
 
 
 
@@ -119,10 +120,10 @@ def _train_cgan(g_apply_grads, d_apply_grads, batchnorm_updates):
     with tf.control_dependencies(batchnorm_updates):
         d_train_op = d_apply_grads
     losses = collection_to_dict(tf.get_collection('losses'))
-    def helper(sess, args):
+    def helper(sess, args, train_phase):
         for i in range(args.n_disc_train):
-            sess.run(d_train_op)
-        _, l = sess.run([g_train_op, losses])
+            sess.run(d_train_op, feed_dict={train_phase: data.TRAIN})
+        _, l = sess.run([g_train_op, losses], feed_dict={train_phase: data.TRAIN})
         return l
         
     return helper
