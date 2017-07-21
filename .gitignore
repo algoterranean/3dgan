@@ -17,3 +17,4 @@ workspace/
 _minted*
 -f
 releases/
+.idea/

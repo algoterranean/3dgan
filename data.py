@@ -8,6 +8,8 @@ VALIDATE = 1
 TEST = 2
 
 
+# a change
+
 def parse_floorplans(example_proto):
     features = {
         'image': tf.FixedLenFeature([], tf.string),
