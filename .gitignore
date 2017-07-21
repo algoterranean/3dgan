@@ -16,3 +16,4 @@ workspace/
 *.tfrecords
 _minted*
 -f
+releases/
