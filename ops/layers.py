@@ -9,16 +9,15 @@ from tensorflow.contrib.framework.python.ops.arg_scope import add_arg_scope
 from tensorflow.contrib.layers import xavier_initializer
 from tensorflow.contrib.layers import batch_norm
 import re
-from util import tensor_name
+from util.scoping import tensor_name
 
 
-
-def weight_name(name):
+def _weight_name(name):
     """Returns variable name with default suffix for weights."""
     return name if name is None else name + '/weights'
 
 
-def bias_name(name):
+def _bias_name(name):
     """Returns variable name with default suffix for biases."""
     return name if name is None else name + '/bias'
 
@@ -38,6 +37,7 @@ def dense(x,
       x: Tensor, the input tensor.
       input_size: Integer, number of input neurons.
       output_size: Integer, number of output neurons.
+      init:
       use_batch_norm: Boolean, whether to use batch normalizationn.
       activation: Operation, activation function.
       reuse: Boolean, whether to reuse variables.
@@ -46,15 +46,19 @@ def dense(x,
     Returns:
       Tensor representing output of fully connected layer.
     """
-    with tf.name_scope(name, 'dense', [x]) as scope:
-        w_name, b_name = weight_name(name), bias_name(name)
+    with tf.name_scope(name, 'dense', [x]):
+        w_name, b_name = _weight_name(name), _bias_name(name)
         with tf.variable_scope('vars', reuse=reuse):
-            W = tf.get_variable(name=w_name, shape=[input_size, output_size], initializer=init())
-            b = tf.get_variable(name=b_name, shape=[output_size], initializer=init())
+            w = tf.get_variable(name=w_name,
+                                shape=[input_size, output_size],
+                                initializer=init())
+            b = tf.get_variable(name=b_name,
+                                shape=[output_size],
+                                initializer=init())
             if not reuse:
-                tf.add_to_collection('weights', W)
+                tf.add_to_collection('weights', w)
                 tf.add_to_collection('biases', b)
-            h = tf.matmul(x, W) + b
+        h = tf.matmul(x, w) + b
         h = batch_norm(h) if use_batch_norm else h
         h = activation(h) if activation else h
         if not reuse:
@@ -66,13 +70,13 @@ def dense(x,
 def conv2d(x,
            input_size,
            output_size,
-           filter_size = 3,
-           stride = 1,
-           init = xavier_initializer,
-           use_batch_norm = False,
-           activation = None,
-           reuse = False,
-           name = None):
+           filter_size=3,
+           stride=1,
+           init=xavier_initializer,
+           use_batch_norm=False,
+           activation=None,
+           reuse=False,
+           name=None):
     """Standard 2D convolutional layer.
 
     Args:
@@ -81,6 +85,7 @@ def conv2d(x,
       output_size: Integer, number of filters in output tensor.
       filter_size: Integer, size of convolution filter.
       stride: Integer, width/height convolution striding. Must be at least 1.
+      init:
       use_batch_norm: Boolean, whether to use batch normalizationn.
       activation: Operation, activation function.
       reuse: Boolean, whether to reuse variables.
@@ -89,16 +94,19 @@ def conv2d(x,
     Returns:
       Tensor representing the output of the convolution layer.
     """
-
-    with tf.name_scope(name, 'conv2d', [x]) as scope:
-        w_name, b_name = weight_name(name), bias_name(name)
+    with tf.name_scope(name, 'conv2d', [x]):
+        w_name, b_name = _weight_name(name), _bias_name(name)
         with tf.variable_scope('vars', reuse=reuse):
-            K = tf.get_variable(name=w_name, shape=[filter_size, filter_size, input_size, output_size], initializer=init())
-            b = tf.get_variable(name=b_name, shape=[output_size], initializer=init())
+            k = tf.get_variable(name=w_name,
+                                shape=[filter_size, filter_size, input_size, output_size],
+                                initializer=init())
+            b = tf.get_variable(name=b_name,
+                                shape=[output_size],
+                                initializer=init())
             if not reuse:
-                tf.add_to_collection('weights', K)
+                tf.add_to_collection('weights', k)
                 tf.add_to_collection('biases', b)            
-        h = tf.nn.conv2d(x, K, strides=[1, stride, stride, 1], padding='SAME')
+        h = tf.nn.conv2d(x, k, strides=[1, stride, stride, 1], padding='SAME')
         h = tf.nn.bias_add(h, b)
         h = batch_norm(h) if use_batch_norm else h
         h = activation(h) if activation else h
@@ -111,16 +119,22 @@ def conv2d(x,
 def deconv2d(x,
              input_size,
              output_size,
-             filter_size = 3,
-             stride = 2,
+             filter_size=3,
+             stride=2,
              init=xavier_initializer,
              use_batch_norm=False,
              activation=None,
-             reuse = False,
+             reuse=False,
              name=None):
     """Standard fractionally strided (deconvolutional) layer.
 
     Args:
+      x:
+      input_size:
+      output_size:
+      filter_size:
+      stride:
+      init:
       use_batch_norm: Boolean, whether to use batch normalizationn.
       activation: Operation, activation function.
       reuse: Boolean, whether to reuse variables.
@@ -129,17 +143,25 @@ def deconv2d(x,
     Returns:
       Tensor representing the output of the deconvolution layer.
     """
-    with tf.name_scope(name, 'deconv2d', [x]) as scope:
-        w_name, b_name = weight_name(name), bias_name(name)
+    with tf.name_scope(name, 'deconv2d', [x]):
+        w_name, b_name = _weight_name(name), _bias_name(name)
         with tf.variable_scope('vars', reuse=reuse):
-            K = tf.get_variable(w_name, [filter_size, filter_size, output_size, input_size], initializer=init())
-            b = tf.get_variable(b_name, [output_size], initializer=init())
+            k = tf.get_variable(w_name,
+                                [filter_size, filter_size, output_size, input_size],
+                                initializer=init())
+            b = tf.get_variable(b_name,
+                                [output_size],
+                                initializer=init())
             if not reuse:
-                tf.add_to_collection('weights', K)
+                tf.add_to_collection('weights', k)
                 tf.add_to_collection('biases', b)
         input_shape = tf.shape(x)
         output_shape = tf.stack([input_shape[0], input_shape[1]*2, input_shape[2]*2, output_size])
-        h = tf.nn.conv2d_transpose(x, K, output_shape=output_shape, strides=[1, stride, stride, 1], padding='SAME')
+        h = tf.nn.conv2d_transpose(x,
+                                   k,
+                                   output_shape=output_shape,
+                                   strides=[1, stride, stride, 1],
+                                   padding='SAME')
         h = tf.nn.bias_add(h, b)
         h = batch_norm(h) if use_batch_norm else h
         h = activation(h) if activation else h
@@ -160,7 +182,7 @@ def flatten(x,
     Returns:
       A flattened tensor that preserves the batch size.
     """
-    with tf.name_scope(name, 'flatten', [x]) as scope:
+    with tf.name_scope(name, 'flatten', [x]):
         output_size = tf.reduce_prod(tf.shape(x)[1:])
         y = tf.reshape(x, [-1, output_size])
     return y

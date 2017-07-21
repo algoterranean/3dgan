@@ -7,7 +7,6 @@ from __future__ import print_function
 import tensorflow as tf
 
 
-
 def batch_slice(x, batch_size, slice_index, name=None):
     """Returns a slice of x appropriate for this GPU (starting at gpu_id=0)
     
@@ -21,7 +20,5 @@ def batch_slice(x, batch_size, slice_index, name=None):
       A tensor representing a slice of the original input tensor.
     """
     with tf.name_scope(name, 'batch_slice', [x]):
-        y = x[slice_index * batch_size : (slice_index+1) * batch_size, :]
+        y = x[slice_index * batch_size:(slice_index+1) * batch_size, :]
     return y
-
-

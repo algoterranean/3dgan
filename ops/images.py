@@ -8,9 +8,9 @@ import tensorflow as tf
 import numpy as np
 import cv2
 import re
-from math import sqrt
-from util import tensor_name
-
+#from math import sqrt
+#from util import tensor_name
+from util.scoping import tensor_name
 
 
 def colorize(x, colormap=cv2.COLORMAP_JET):
@@ -37,8 +37,3 @@ def colorize(x, colormap=cv2.COLORMAP_JET):
     x = tf.py_func(helper, [x], tf.uint8)
     x = tf.reshape(x, [-1, 64, 64, 3])
     return x
-
-
-
-
-

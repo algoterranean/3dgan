@@ -7,7 +7,6 @@ from __future__ import print_function
 import tensorflow as tf
 
 
-
 def lrelu(x, leak=0.2, name=None):
     """Leakly ReLU activation function.
 
@@ -41,6 +40,7 @@ def selu(x, alpha=1.67236, scale=1.507, name=None):
       x: Tensor, input tensor.
       alpha: 
       scale:
+      name:
 
     Source:
     ------

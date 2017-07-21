@@ -7,7 +7,7 @@ from __future__ import print_function
 import tensorflow as tf
 import re
 from math import sqrt
-from util import tensor_name
+from util.scoping import tensor_name
 
 
 def summarize_activations():
@@ -51,6 +51,14 @@ def summarize_gradients(grads_and_vars, name=None):
         for g, v in grads_and_vars:
             tf.summary.histogram(tensor_name(v) + '/gradient', g)
 
+def summarize_collection(name, scope):
+    """Add a scalar summary for every tensor in a collection."""
+    collection = tf.get_collection(name, scope)
+    for x in collection:
+        tf.summary.scalar(tensor_name(x), x)
+    return collection
+
+
 
 # def activation_summary(x, rows=0, cols=0, montage=True, name=None):
 #     """Summarize activations of input tensor.
@@ -88,7 +96,7 @@ def factorization(n):
     """
     for i in range(int(sqrt(float(n))), 0, -1):
         if n % i == 0: #and i > 1:
-            return (i, int(n/i))
+            return i, int(n/i)
     # raise ValueError("Invalid montage grid size of {}".format(n))
         
         

@@ -8,10 +8,11 @@ import tensorflow as tf
 from tensorflow.contrib.framework.python.ops.arg_scope import arg_scope
 from math import sqrt
 
-from util import * #tower_scope_range, average_gradients, init_optimizer, default_to_cpu, merge_all_summaries, default_training, tensor_name
+#from util import * #tower_scope_range, average_gradients, init_optimizer, default_to_cpu, merge_all_summaries, default_training, tensor_name
 from ops.layers import dense, conv2d, deconv2d, flatten
 from ops.summaries import montage_summary, summarize_gradients, summarize_activations, summarize_losses, summarize_weights_biases
 from ops.activations import lrelu
+from util.scoping import default_to_cpu
 
 
 # TODO: build decoder from same weights as encoder

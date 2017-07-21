@@ -28,10 +28,12 @@ import tensorflow as tf
 from tensorflow.contrib.layers import batch_norm
 from tensorflow.contrib.framework.python.ops.arg_scope import arg_scope
 
-from util import * #tower_scope_range, average_gradients, init_optimizer, default_to_cpu, merge_all_summaries
+#
+# from util import * #tower_scope_range, average_gradients, init_optimizer, default_to_cpu, merge_all_summaries
 from ops.layers import dense, conv2d, deconv2d, flatten
 from ops.activations import lrelu
 from ops.summaries import montage_summary, summarize_gradients, summarize_activations, summarize_losses, summarize_weights_biases
+from util.scoping import default_to_cpu
 
 
 
