@@ -1,19 +1,21 @@
 # stdlib/external
-import tensorflow as tf
-import numpy as np
-import matplotlib.pyplot as plt
 import argparse
-import os
-import cv2
 import datetime
-from math import ceil, sqrt
+import os
 from itertools import chain
+from math import ceil, sqrt
+
+import cv2
+import matplotlib.pyplot as plt
+import numpy as np
+import tensorflow as tf
+
+
 # local
 # from models.fc import simple_fc
 # from models.conv import simple_cnn
 # from models.chen import chen_cnn
 # from models.shared_cnn import shared_cnn
-from util import *
 
 
 

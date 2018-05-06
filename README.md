@@ -39,6 +39,16 @@ In addition, this code supports the following features:
 - Support for multiple GPUs.
 - Ability to resume training from disk.
 
+
+## Prerequisites
+
+- `tensorflow` (>= 1.3)
+- `numpy`
+- `cv2`
+- `colored_traceback`
+- `tqdm`
+
+
 ## To Use
 
 To run this code, either run `train.py` (to initialize and train a model) or `visualize.py` (for additional visualizations from a checkpointed model). 

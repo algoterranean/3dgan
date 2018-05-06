@@ -18,3 +18,7 @@ _minted*
 -f
 releases/
 .idea/
+*.bib
+*.bbl
+*.run.xml
+*.blg

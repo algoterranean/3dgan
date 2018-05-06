@@ -31,35 +31,155 @@
 
 \begin{document}
 
+
+
 \begin{flushleft}
-  \emph{Unsupervised Representation Learning with Deep Convolutional Generative Adversarial Networks}\\
-  Radford, Metz, and Chintala, 2015\\
-  \href{https://arxiv.org/abs/1511.06434}{https://arxiv.org/abs/1511.06434}\\
+  \section{Sampler GAN}
 
-  \subsection*{Architecture}
+  \subsection{Overview}
   \begin{itemize}
-
-  \item Uses strided convolution instead of maxpooling, allowing the model to learn its own spatial downsampling.
-  \item Uses an all-convolutional net with only 2 fully connected layers (from $z$ to first convolution in generator, and from final convolution of discriminator to output).\footnote{Using global averaging pooling with fully connected layers resulted in increased model stability but hurt convergence speed.}
-  \item Last layer of discriminator is flattened to fed into a single sigmoid output.
-  \item Uses batch norm on all layers except generator output layer and discriminator input layer.\footnote{Using batchnorm everywhere resulted in sample oscillation and model instability.}
-  \item The generator uses ReLU activation everywhere with the exception of the output layer, which uses Tanh.\footnote{Using a bounded activation allowed the model to learn more quickly to saturate and cover the color space of the training distribution.}
-  \item The discriminator uses LeakyReLU activation everywhere. 
+  \item This GAN is a conditional, noisy generator coupled with a traditional discriminator.
+  The generator learns to predict the depth map of single RGB patches while preserving stochasticity.
+  The hope is that the generator learns to predict multiple samples for a single RGB patch, and that by taking the best sample for each patch, and multiple patches per image, we can then reconstruct a global depth map.
   \end{itemize}
 
-  \subsection*{Training}
+  \subsection{Dataset}
 
   \begin{itemize}
-  \item Images were scaled to [-1, 1], the range of the Tanh activation function. Otherwise no pre-processing was done.
-  \item Trained with minibatch SGD with a mini-batch size of 128.
-  \item Weights were initialized from a Normal distrbution with mean 0 and variance 0.02.
-  \item The slope of the leak for LeakyReLU was set to 0.2 in all models.
-  \item Uses Adam optimizer with $\alpha = 0.0002$ and $\beta_1 = 0.5$.
+  \item We use the NYUv2 dataset.
+  We use the official train/test scene splits, then use the toolbox alignment tools to generate correlated RGB-Depth pairs.
+  We select every 10th image from this set (under the idea that nearby frames likely contribute little new information) and use one pass of the toolbox fill code to fill in some of the missing depth values.
+  We then center-crop each RGB-D pair to 561x427\footnote{This is a byproduct of using the dataset previously with mdepth/VGG, which uses this size as the input.} and set aside 10\% of the training data for validation purposes.
+  This gives us a final set of 27,858 images for training, 3,095 for validation, and 20,343 for testing.
+
+\item From each image we then select a random 65x65 crop and throw away any that have invalid depth values (0 or uint16.max, representing pixels for which the Kinect camera did not receive back any reflected depth measurements). Currently
+  this is not deterministic, but the resulting datasets tend to fluctuate around 95\% of the original size. We then further center-crop the depth map to size 31x31.
+  
+\item The final RGB-D pairs are then remapped to the range [-1, 1].
   \end{itemize}
+  
+  \subsection{Architecture}
+
+
+
+  \subsubsection{Generator}
+  \begin{itemize}
+  \item The input to the generator is a 65x65x3 RGB patch. To this we concatenate a 65x65x1 noisy uniform vector (over the same range as the input, or [-1, 1]). 
+  \item The output of the generator is a 31x31x1 estimated depth map.
+  \item The generator is an autoencoder with skip layers. It takes the input, and, over 4 layers, reduces the dimensions to a latent vector of 1x1x256, then expands this back out to a final output of 31x31x1.
+  \item Let \texttt{Ck.2} represent a 2D convolution of stride 2, VALID padding, filter size 5, and \texttt{k} output filters, followed by batch normalization and an activation LeakyReLU layer (leak=0.2).
+  \item Let \texttt{Ck.1} represent a 2D convolution of stride 1, SAME padding, filter size 5, and \texttt{k} output filters, followed by batch normalization and an activation LeakyReLU layer (leak=0.2).
+  \item Let \texttt{Dk.2} represent a 2D transpose convolution of stride 2, VALID padding, filter size 5, and \textt{k} output filters, followed by batch normalization and an activation LeakyReLU (leak=0) layer. We then concatenate the output of the appropriate encoder layer (doubling the number of filters). 
+  \item Let \texttt{Dk.1} represent a 2D transpose convolution of stride 1, SAME padding, filter size 5, and \textt{k} output filters, followed by batch normalization and an activation LeakyReLU (leak=0) layer.
+
+  \item Then the generator's architecture can be described as
+
+    \begin{tabular}{l l l l}
+      Unit & Layer & Input Size & Output Size \\
+      \hline
+      Encoder & \texttt{C64.2} & 65x65x4 & 31x31x64 \\
+      & \texttt{C64.1} & 31x31x64 & 31x31x64 \\
+      & \texttt{C64.1} & 31x31x64 & 31x31x64 \\
+      & \texttt{C128.2} & 31x31x64 & 14x14x128 \\
+      & \texttt{C128.1} & 14x14x128 & 14x14x128 \\
+      & \texttt{C128.1} & 14x14x128 & 14x14x128 \\
+      & \texttt{C256.2} & 14x14x128 & 5x5x256 \\
+      & \texttt{C256.1} & 5x5x256 & 5x5x256 \\
+      & \texttt{C256.1} & 5x5x256 & 5x5x256 \\
+      & \texttt{C256.2} & 5x5x256 & 1x1x256 \\
+      Decoder & \texttt{D256.2} & 1x1x256 & 5x5x512 \\
+      & \texttt{D512.1} & 5x5x512 & 5x5x512 \\
+      & \texttt{D128.2} & 5x5x512 & 14x14x256 \\
+      & \texttt{D128.1} & 14x14x256 & 14x14x256 \\
+      & \texttt{D64.2} & 14x14x256 & 31x31x128 \\
+      & \texttt{D64.1} & 31x31x128 & 31x31x128 \\
+      & \texttt{D1.2} & 31x31x128 & 31x31x1
+    \end{tabular}
+
+  \item All weights are initialized to a Gaussian with mean 0 and stddev 0.02.
+  \item There is no batch norm on the first layer of the encoder.
+  \end{itemize}
+
+
+  \subsubsection{Discriminator}
+  \begin{itemize}
+  \item The discriminator has two inputs, the 65x65x3 RGB patch and the matching 33x33x1 center-cropped depth:
+    \begin{itemize}
+    \item The RGB input is run through a 2D convolution (VALID padding, filter size 5, stride 2), followed by LeakyReLU (leak=0.2).
+    \item The Depth input is expanded through a 2D convolution (SAME padding, filter size 1, stride 1), followed by LeakyReLU (leak=0.2).
+    \end{itemize}
+  \item These two inputs are then concatenated together and run through 3 more convolutions of increasing depth (128, 256, and 512 filters, respectively), all with stride 2, filter size 5, and LeakyReLU activation (leak=0.2).
+  \item The final output is then run through sigmoid activation to generate a single output in range [0, 1].
+  \end{itemize}
+
+  \subsection{Training}
+
+  \begin{itemize}
+  \item The generator and discriminator are trained equally (one generator iteration followed by one discriminator) using SGD with the ADAM solver, learning rate 1e-5, and momentum 0.5.
+  \item Training was conducted with a batch size of 64 over 200 epochs, with 217 batches per GPU per epoch, for 27,776 samples per epoch or about 5.5 million training images. Batches are selected from the dataset via fair random draw. The original random crops (one 65x65 RGB drop and one 33x33 depth crop) are generated only once, at the beginning of training.
+  \item We use the standard GAN cross-entropy loss functions. 
+  \end{itemize}
+
+  \subsection{Results}
+
+
+    \begin{figure}
+      \includegraphics[scale=0.60]{generator_loss}
+      \caption{Graph of the generator's loss.}
+    \end{figure}
+
+    \begin{figure}
+      \includegraphics[scale=0.60]{discriminator_loss}
+      \caption{Graph of the discriminator's loss.}
+    \end{figure}
+
+
+
+  \begin{figure}
+    \includegraphics[scale=0.60]{sample_mean}
+    \caption{The mean RMSE of the sampler's output. The sampler is given 64 copies of the same RGB image and asked to generate predictions for each one. We calculate the RMSE of each one from ground-truth and display the mean of these here.}
+  \end{figure}
+
+  \begin{figure}
+    \includegraphics[scale=0.60]{sample_min}
+    \caption{The min RMSE of the sampler's output. Likewise, we track the best of the sampler's outputs each time. Note that while the sampler's outputs are overall poor, there is a best one in each batch that is significantly better.}
+  \end{figure}
+  
+
+  \begin{figure}
+    \includegraphics[scale=0.75]{real_images}
+    \caption{Example images.}
+  \end{figure}
+
+  \begin{figure}
+    \includegraphics{real_depths}
+    \caption{Example, ground-truth depths.}
+  \end{figure}
+  
+  \begin{figure}
+    \includegraphics{fake_depths}
+    \caption{The corresponding generator output for the same images.}
+  \end{figure}
+
+  \begin{figure}
+    \includegraphics[scale=0.75]{sampler_real}
+    \caption{The sampler's real input images}
+  \end{figure}
+
+  \begin{figure}
+    \includegraphics{sampler_depth_real}
+    \caption{The sampler's ground-truth depth.}
+  \end{figure}
+
+  \begin{figure}
+    \includegraphics{sampler_depth}
+    \caption{64 depth predictions from the generator for the single sampler input image.}
+  \end{figure}
+    
   
 \end{flushleft}
 
 
 
-%% Source: \cite{radford2015unsupervised}
+
 \end{document}

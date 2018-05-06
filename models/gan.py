@@ -19,25 +19,15 @@ https://arxiv.org/abs/1701.07875
 https://arxiv.org/abs/1704.00028
 """
 
-from __future__ import absolute_import
-from __future__ import division
-from __future__ import print_function
 
-import numpy as np
+from __future__ import absolute_import, division, print_function
+
 import tensorflow as tf
-from tensorflow.contrib.layers import batch_norm
 from tensorflow.contrib.framework.python.ops.arg_scope import arg_scope
-
-#
-# from util import * #tower_scope_range, average_gradients, init_optimizer, default_to_cpu, merge_all_summaries
-from ops.layers import dense, conv2d, deconv2d, flatten
-from ops.activations import lrelu
-from ops.summaries import montage_summary, summarize_gradients, summarize_activations, summarize_losses, summarize_weights_biases
-from util.scoping import default_to_cpu
+import hem
 
 
-
-@default_to_cpu
+@hem.default_to_cpu
 def gan(x, args):
     """Initialize model.
         
@@ -45,16 +35,16 @@ def gan(x, args):
     x: Tensor, the real images.
     args: Argparse structure.
     """
-    g_opt, d_opt = init_optimizer(args), init_optimizer(args)
+    g_opt, d_opt = hem.init_optimizer(args), hem.init_optimizer(args)
     g_tower_grads, d_tower_grads = [], []
 
-    x = flatten(x)
+    x = hem.flatten(x)
     x = 2 * (x - 0.5)    
     # rescale [0,1] to [-1,1] depending on model
     # if args.model in ['wgan', 'iwgan']:
     # x = 2 * (x - 0.5)
             
-    for x, scope, gpu_id in tower_scope_range(x, args.n_gpus, args.batch_size):
+    for x, scope, gpu_id in hem.tower_scope_range(x, args.n_gpus, args.batch_size):
         # model
         with tf.variable_scope('generator'):
             g = generator(args.batch_size, args.latent_size, args, reuse=(gpu_id>0))
@@ -75,9 +65,9 @@ def gan(x, args):
     summaries(g, x, args)
         
     # average and apply gradients
-    g_grads = average_gradients(g_tower_grads)
-    d_grads = average_gradients(d_tower_grads)
-    summarize_gradients(g_grads + d_grads)
+    g_grads = hem.average_gradients(g_tower_grads)
+    d_grads = hem.average_gradients(d_tower_grads)
+    hem.summarize_gradients(g_grads + d_grads)
     global_step = tf.train.get_global_step()
     g_apply_grads = g_opt.apply_gradients(g_grads, global_step=global_step)
     d_apply_grads = d_opt.apply_gradients(d_grads, global_step=global_step)
@@ -102,11 +92,14 @@ def summaries(g, x, args):
             # need to rescale images from [-1,1] to [0,1]
             real_examples = (x[0:args.examples] + 1.0) / 2
             fake_examples = (g[0:args.examples] + 1.0) / 2
-        montage_summary(tf.reshape(real_examples, [-1, 64, 64, 3]), 8, 8, 'inputs')
-        montage_summary(tf.reshape(fake_examples, [-1, 64, 64, 3]), 8, 8, 'fake')
-    summarize_activations()
-    summarize_losses()
-    summarize_weights_biases()
+            real_examples = tf.reshape(real_examples, [-1, 3, 64, 64])
+            fake_examples = tf.reshape(fake_examples, [-1, 3, 64, 64])
+
+        hem.montage_summary(real_examples, 8, 8, name='inputs')
+        hem.montage_summary(fake_examples, 8, 8, name='fake')
+    hem.summarize_activations()
+    hem.summarize_losses()
+    hem.summarize_weights_biases()
 
 
 def _train_gan(g_apply_grads, d_apply_grads, batchnorm_updates):
@@ -126,9 +119,9 @@ def _train_gan(g_apply_grads, d_apply_grads, batchnorm_updates):
     with tf.control_dependencies(batchnorm_updates):
         g_train_op = g_apply_grads
         d_train_op = d_apply_grads
-    losses = collection_to_dict(tf.get_collection('losses'))
-    def helper(sess, args):
-        _, _, l = sess.run([d_train_op, g_train_op, losses])
+    losses = hem.collection_to_dict(tf.get_collection('losses'))
+    def helper(sess, args, train_phase):
+        _, _, l = sess.run([d_train_op, g_train_op, losses], feed_dict={train_phase:PHASE_TRAIN})
         return l
     return helper
 
@@ -148,11 +141,11 @@ def _train_wgan(g_apply_grads, g_params, d_apply_grads, d_params, batchnorm_upda
             d_train_op = d_apply_grads
         with tf.control_dependencies(clip_G):
             g_train_op = g_apply_grads
-    losses = collection_to_dict(tf.get_collection('losses'))
-    def helper(sess, args):
+    losses = hem.collection_to_dict(tf.get_collection('losses'))
+    def helper(sess, args, train_phase):
         for i in range(args.n_disc_train):
-            sess.run(d_train_op)
-        _, l = sess.run([g_train_op, losses])
+            sess.run(d_train_op, feed_dict={train_phase: hem.PHASE_TRAIN})
+        _, l = sess.run([g_train_op, losses], feed_dict={train_phase: hem.PHASE_TRAIN})
         return l
     return helper
 
@@ -168,10 +161,10 @@ def _train_iwgan(g_apply_grads, d_apply_grads, batchnorm_updates):
     with tf.control_dependencies(batchnorm_updates):
         d_train_op = d_apply_grads
     losses = collection_to_dict(tf.get_collection('losses'))
-    def helper(sess, args):
+    def helper(sess, args, train_phase):
         for i in range(args.n_disc_train):
-            sess.run(d_train_op)
-        _, l = sess.run([g_train_op, losses])
+            sess.run(d_train_op, feed_dict={train_phase: PHASE_TRAIN})
+        _, l = sess.run([g_train_op, losses], feed_dict={train_phase: PHASE_TRAIN})
         return l
         
     return helper
@@ -205,11 +198,9 @@ def losses(x, g, d_fake, d_real, args):
             gp = gradient_penalty(x, g, args)
         d_loss = tf.reduce_mean(d_fake) - tf.reduce_mean(d_real) + l_term * gp
         d_loss = tf.identity(d_loss, name='d_loss')
-    
+
     tf.add_to_collection('losses', g_loss)
     tf.add_to_collection('losses', d_loss)
-    # tf.summary.scalar('g_loss', g_loss)
-    # tf.summary.scalar('d_loss', d_loss)
     return g_loss, d_loss
 
 
@@ -241,17 +232,17 @@ def generator(batch_size, latent_size, args, reuse=False):
     """
     # final_activation = tf.tanh if args.model in ['wgan', 'iwgan'] else tf.nn.sigmoid
     output_dim = 64*64*3
-    with arg_scope([dense, deconv2d],
+    with arg_scope([hem.dense, hem.deconv2d],
                        reuse = reuse,
                        use_batch_norm = True,
                        activation = tf.nn.relu):
         z = tf.random_normal([batch_size, latent_size])
-        y = dense(z, latent_size, 4*4*4*latent_size, name='fc1')
-        y = tf.reshape(y, [-1, 4, 4, 4*latent_size])
-        y = deconv2d(y, 4*latent_size, 2*latent_size, 5, 2, name='dc1')
-        y = deconv2d(y, 2*latent_size, latent_size, 5, 2, name='dc2')
-        y = deconv2d(y, latent_size, int(latent_size/2), 5, 2, name='dc3')
-        y = deconv2d(y, int(latent_size/2), 3, 5, 2, name='dc4', activation=tf.tanh, use_batch_norm=False)
+        y = hem.dense(z, latent_size, 4*4*4*latent_size, name='fc1')
+        y = tf.reshape(y, [-1, 4 * latent_size, 4, 4])
+        y = hem.deconv2d(y, 4*latent_size, 2*latent_size, 5, 2, name='dc1')
+        y = hem.deconv2d(y, 2*latent_size, latent_size, 5, 2, name='dc2')
+        y = hem.deconv2d(y, latent_size, int(latent_size/2), 5, 2, name='dc3')
+        y = hem.deconv2d(y, int(latent_size/2), 3, 5, 2, name='dc4', activation=tf.tanh, use_batch_norm=False)
         y = tf.reshape(y, [-1, output_dim])
     return y
 
@@ -275,15 +266,16 @@ def discriminator(x, args, reuse=False):
     """
     use_bn = False if args.model == 'iwgan' else True
     final_activation = None if args.model in ['wgan', 'iwgan'] else tf.nn.sigmoid
-    with arg_scope([conv2d],
+    with arg_scope([hem.conv2d],
                        use_batch_norm = use_bn,
-                       activation = lrelu,
+                       activation = hem.lrelu,
                        reuse = reuse):
-        x = tf.reshape(x, [-1, 64, 64, 3])
-        x = conv2d(x, 3, args.latent_size, 5, 2, name='c1', use_batch_norm=False)
-        x = conv2d(x, args.latent_size, args.latent_size*2, 5, 2, name='c2')
-        x = conv2d(x, args.latent_size*2, args.latent_size*4, 5, 2, name='c3')
+
+        x = tf.reshape(x, [-1, 3, 64, 64])
+        x = hem.conv2d(x, 3, args.latent_size, 5, 2, name='c1', use_batch_norm=False)
+        x = hem.conv2d(x, args.latent_size, args.latent_size*2, 5, 2, name='c2')
+        x = hem.conv2d(x, args.latent_size*2, args.latent_size*4, 5, 2, name='c3')
         x = tf.reshape(x, [-1, 4*4*4*args.latent_size])
-        x = dense(x, 4*4*4*args.latent_size, 1, use_batch_norm=False, activation=final_activation, name='fc2', reuse=reuse)
+        x = hem.dense(x, 4*4*4*args.latent_size, 1, use_batch_norm=False, activation=final_activation, name='fc2', reuse=reuse)
         x = tf.reshape(x, [-1])
     return x

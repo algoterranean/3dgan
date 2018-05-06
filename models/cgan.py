@@ -8,268 +8,362 @@ Sources:
   http://arxiv.org/abs/1611.07004
 """
 
-from __future__ import absolute_import
-from __future__ import division
-from __future__ import print_function
+from __future__ import absolute_import, division, print_function
 
-import numpy as np
 import tensorflow as tf
-from tensorflow.contrib.layers import batch_norm
 from tensorflow.contrib.framework.python.ops.arg_scope import arg_scope
+import hem
 
-# from util import * #tower_scope_range, average_gradients, init_optimizer, default_to_cpu, merge_all_summaries
-import data
-from util.scoping import default_to_cpu, tower_scope_range
-from util.training import init_optimizer, average_gradients
-from util.misc import collection_to_dict
-from ops.layers import dense, conv2d, deconv2d, flatten
-from ops.activations import lrelu
-from ops.summaries import montage_summary, summarize_gradients, summarize_activations, summarize_losses, \
-    summarize_weights_biases
-from ops.images import colorize
+# TODO add support for sizing other than 64x64
+# TODO add support to hem ops for multiple input tensors
 
-# hello
 
-@default_to_cpu
+@hem.default_to_cpu
 def cgan(x, args):
-    """Initialize model.
+    """Create conditional GAN ('pix2pix') model on the graph.
 
     Args:
-    x: Tensor, the real images.
-    args: Argparse structure.
+        x: Tensor, the real images.
+        args: Argparse structure
+
+    Returns:
+        Function, the training function. Call for one iteration of training.
     """
+    # init/setup
+    g_opt = hem.init_optimizer(args)
+    d_opt = hem.init_optimizer(args)
+    g_tower_grads = []
+    d_tower_grads = []
+    global_step = tf.train.get_global_step()
 
-    g_opt, d_opt = init_optimizer(args), init_optimizer(args)
-    g_tower_grads, d_tower_grads = [], []
+    # rescale to [-1, 1]
+    x = hem.rescale(x, (0, 1), (-1, 1))
 
-    x = 2 * (x - 0.5)
-    g = None
-    batchnorm_updates = None
-
-    for x, scope, gpu_id in tower_scope_range(x, args.n_gpus, args.batch_size):
+    for x, scope, gpu_id in hem.tower_scope_range(x, args.n_gpus, args.batch_size):
         # model
+        x_rgb, x_depth = _split(x)
+        # generator
         with tf.variable_scope('generator'):
-            e = encoder(x[:, :, :, 0:3], reuse=(gpu_id > 0))
-            d = decoder(e, args.skip_layers, reuse=(gpu_id > 0))
-            g = tf.concat((x[:, :, :, 0:3], d), axis=-1)
-            # g = generator(x[:,:,:,0:3], args.batch_size, args.latent_size, args, reuse=(gpu_id>0))
+
+            g = generator(x_rgb, args, reuse=(gpu_id > 0))
+        # discriminator
         with tf.variable_scope('discriminator'):
             d_real = discriminator(x, args, reuse=(gpu_id > 0))
             d_fake = discriminator(g, args, reuse=True)
         # losses
         g_loss, d_loss = losses(x, g, d_fake, d_real, args, reuse=(gpu_id > 0))
-        # compute gradients
+        # gradients
         g_params = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, 'generator')
         d_params = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, 'discriminator')
         g_tower_grads.append(g_opt.compute_gradients(g_loss, var_list=g_params))
         d_tower_grads.append(d_opt.compute_gradients(d_loss, var_list=d_params))
         # only need one batchnorm update (ends up being updates for last tower)
         batchnorm_updates = tf.get_collection(tf.GraphKeys.UPDATE_OPS, scope)
-        
-    # summaries
-    summaries(g, x, args)
-        
+
     # average and apply gradients
-    g_grads = average_gradients(g_tower_grads)
-    d_grads = average_gradients(d_tower_grads)
-    summarize_gradients(g_grads + d_grads)
-    global_step = tf.train.get_global_step()
+    g_grads = hem.average_gradients(g_tower_grads)
+    d_grads = hem.average_gradients(d_tower_grads)
     g_apply_grads = g_opt.apply_gradients(g_grads, global_step=global_step)
     d_apply_grads = d_opt.apply_gradients(d_grads, global_step=global_step)
-    
+    # add summaries
+    _summaries(g, x, args)
+    hem.add_basic_summaries(g_grads + d_grads)
     # training
-    train_func = _train_cgan(g_apply_grads, d_apply_grads, batchnorm_updates)
-
-    return train_func
+    return _train_cgan(g_apply_grads, d_apply_grads, batchnorm_updates)
 
 
-def summaries(g, x, args):
-    """Adds histogram and montage summaries for real and fake examples."""
+def _summaries(g, x, args):
+    """Add specialized summaries to the graph.
+
+    This adds summaries that:
+        - Track variability in generator samples given random noise vectors.
+        - Track how much of the noise vector is used.
+        - Generate examples from the real and learned distributions.
+
+    Args:
+        g: Tensor, the generator's output. i.e., the fake images.
+        x: Tensor, the real (input) images.
+        args: Argparse structure.
+
+    Returns:
+        None
+    """
+    # 1. generate multiple samples using a single image
+    with tf.variable_scope(tf.get_variable_scope()):
+        gpu_id = 0
+        with tf.device(hem.variables_on_cpu(gpu_id)):
+            with tf.name_scope('tower_{}'.format(gpu_id)) as scope:
+                # print('input shape', x.shape)
+                with tf.variable_scope('generator'):
+                    # using first image in batch, form new one with just this image
+                    x_repeated = tf.stack([x[0]] * args.batch_size)
+                    x_rgb, x_depth = _split(x_repeated)
+                    # then create a new path for the generator using just this dataset
+                    import copy
+                    args_copy = copy.copy(args)
+                    args_copy.batch_norm=False
+                    d = generator(x_rgb, args_copy, reuse=True)
+                    # scale to [0, 1]
+                    sampler_rgb, sampler_depth = _split(d)
+                    sampler_rgb = hem.rescale(sampler_rgb, (-1, 1), (0, 1))
+                    sampler_depth = hem.rescale(sampler_depth, (-1, 1), (0, 1))
+
+    with tf.variable_scope('sampler'):
+        hem.montage(sampler_rgb[0:args.examples], 8, 8, name='images')
+        hem.montage(sampler_depth[0:args.examples], 8, 8, name='depths')
+
+        # and track the variance of the depth predictions
+        mean, var = tf.nn.moments(sampler_depth, axes=[0])
+        hem.scalars(('predicted_depth_mean', tf.reduce_mean(mean)), ('predicted_depth_var', tf.reduce_mean(var)))
+
+        # and the images (temporary, for calibration/sanity check)
+        x_rgb, x_depth = _split(x)
+        mean, var = tf.nn.moments(x_depth, axes=[0])
+        hem.scalars(('real_depth_mean', tf.reduce_mean(mean)), ('real_depth_var', tf.reduce_mean(var)))
+
+        sampler_rgb = tf.transpose(sampler_rgb, [0, 2, 3, 1])
+        sampler_depth = tf.transpose(sampler_depth, [0, 2, 3, 1])
+
+        # mean, var = tf.nn.moments(tf.image.rgb_to_grayscale(sampler_rgb), axes=[0])
+        axis = [0, -1]
+        mean, var = tf.nn.moments(tf.image.rgb_to_grayscale(sampler_rgb), axes=[0])
+        hem.scalars(('image_mean', tf.reduce_mean(mean)), ('image_var', tf.reduce_mean(var)))
+
+        mean, var = tf.nn.moments(sampler_depth, axes=[0])
+        hem.scalars(('depth_mean', tf.reduce_mean(mean)), ('depth_var', tf.reduce_mean(var)))
+
+
+    # 2. generate summaries for real and fake images
     with tf.variable_scope('examples'):
-        tf.summary.histogram('fakes', g)
-        tf.summary.histogram('real', x)
-        with tf.variable_scope('rescale'):
-            # need to rescale images from [-1,1] to [0,1]
-            real_examples = tf.reshape((x[0:args.examples] + 1.0) / 2, [-1, 64, 64, 4])
-            fake_examples = tf.reshape((g[0:args.examples] + 1.0) / 2, [-1, 64, 64, 4])
-            real_images = real_examples[:, :, :, 0:3]
-            real_depths = real_examples[:, :, :, 3]
-            fake_images = fake_examples[:, :, :, 0:3]
-            fake_depths = fake_examples[:, :, :, 3]
+        hem.histograms(('fake', g), ('real', x))
+        # rescale, split, and colorize
+        x = hem.rescale(x[0:args.examples], (-1, 1), (0, 1))
+        g = hem.rescale(g[0:args.examples], (-1, 1), (0, 1))
+        hem.histograms(('fake_rescaled', g), ('real_rescaled', x))
 
-            fake_depths = colorize(fake_depths)
-            real_depths = colorize(real_depths)
-            
-        montage_summary(real_images, 8, 8, 'input_images')
-        montage_summary(real_depths, 8, 8, 'input_depths')
-        montage_summary(fake_images, 8, 8, 'fake_images')
-        montage_summary(fake_depths, 8, 8, 'fake_depths')
-        
-        # montage_summary(tf.reshape(real_examples[:,:,:,0:3], [-1, 64, 64, 3]), 8, 8, 'input_images')
-        # montage_summary(tf.reshape(real_examples[:,:,:,3], [-1, 64, 64, 1]), 8, 8, 'input_depths')
-        # montage_summary(tf.reshape(fake_examples[:,:,:,0:3], [-1, 64, 64, 3]), 8, 8, 'fake_images')
-        # montage_summary(tf.reshape(fake_examples[:,:,:,3], [-1, 64, 64, 1]), 8, 8, 'fake_depths')
-    summarize_activations()
-    summarize_losses()
-    summarize_weights_biases()
+        x_rgb, x_depth = _split(x)
+        g_rgb, g_depth = _split(g)
+        # note: these are rescaled to (0, 1)
+        hem.histograms(('real_depth', x_depth), ('fake_depth', g_depth),
+                       ('real_rgb', x_rgb), ('fake_rgb', g_rgb))
+        # add montages
+        # TODO shouldn't be fixed to 8, but to ceil(sqrt(args.examples))
+        hem.montage(x_rgb,   8, 8, name='real/images')
+        hem.montage(x_depth, 8, 8, name='real/depths')
+        hem.montage(g_rgb,   8, 8, name='fake/images')
+        hem.montage(g_depth, 8, 8, name='fake/depths')
+
+    # 3. add additional summaries for weights and biases in e_c1 (the initial noise layer)
+    # TODO don't iterate through list, but grab directly by full name
+    with tf.variable_scope('noise'):
+        for l in tf.get_collection('weights'):
+            if 'e_c1' in hem.tensor_name(l):
+                print(l, hem.tensor_name(l))
+                x_rgb, x_noise = _split(l)
+                hem.histograms(('rgb/weights', x_rgb), ('noise/weights', x_noise))
+                hem.scalars(('rgb/weights/sparsity', tf.nn.zero_fraction(x_rgb)),
+                            ('noise/weights/sparsity', tf.nn.zero_fraction(x_noise)),
+                            ('noise/weights/mean', tf.reduce_mean(x_noise)),
+                            ('rgb/weights/mean', tf.reduce_mean(x_rgb)))
+                break
 
 
 def _train_cgan(g_apply_grads, d_apply_grads, batchnorm_updates):
-    """Generates helper to train a Conditional IWGAN.
+    """Generates helper to train a Conditional, Improved Wasserstein GAN.
 
-    Batchnorm updates are applies only to discriminator, since generator
+    Batchnorm updates are applied only to discriminator, since generator
     doesn't use batchnorm. Discriminator is trained to convergence
     before training the generator.
+
+    Args:
+        g_apply_grads:
+        d_apply_grads:
+        batchnorm_updates:
+
+    Returns:
+        Function, a function that trains the model for one iteration per call.
     """
     g_train_op = g_apply_grads
     with tf.control_dependencies(batchnorm_updates):
         d_train_op = d_apply_grads
-    losses = collection_to_dict(tf.get_collection('losses'))
+    all_losses = hem.collection_to_dict(tf.get_collection('losses'))
 
-    def helper(sess, args, train_phase):
+    def helper(sess, args, handle, training_handle):
         for i in range(args.n_disc_train):
-            sess.run(d_train_op, feed_dict={train_phase: data.TRAIN})
-        _, l = sess.run([g_train_op, losses], feed_dict={train_phase: data.TRAIN})
+            sess.run(d_train_op, feed_dict={handle: training_handle})
+        _, l = sess.run([g_train_op, all_losses], feed_dict={handle: training_handle})
         return l
-        
+
     return helper
 
         
 def losses(x, g, d_fake, d_real, args, reuse=False):
     """Add loss nodes to the graph depending on the model type.
 
+    This implements an Improved Wasserstein loss with an additional
+    reconstruction loss term in the generator.
+
     Args:
-        x: Tensor, real images.
-        g: Tensor, the generator.
-        d_fake: Tensor, the fake discriminator.
-        d_real: Tensor, the real discriminator.
-        args: Argparse structure.
-        reuse:
+        x: Tensor, the real (input) images.
+        g: Tensor, the fake images (i.e. the output from the generator)
+        d_fake: Tensor, the discriminator using the fake images.
+        d_real: Tensor, the discriminator using the real images.
+        args: Argparse struct.
+        reuse: Boolean, whether to reuse the variables in this scope.
 
     Returns:
-        g_loss: Tensor, the generator's loss function.
-        d_loss: Tensor, the discriminator's loss function.
-    """
+        g_loss: Op, the loss op for the generator.
+        d_loss: Op, the loss op for the discriminator.
 
-    rmse_loss = tf.sqrt(tf.reduce_mean(tf.square((x[:, :, :, 3]+1.0)/2.0 - (g[:, :, :, 3]+1.0)/2.0)), name='rmse_loss')
-    g_loss = tf.identity(-tf.reduce_mean(d_fake) + rmse_loss, name='g_loss')
-    
-    l_term = 10.0    
-    with tf.variable_scope('discriminator'):
-        gp = gradient_penalty(x, g, args)
-    d_loss = tf.reduce_mean(d_fake) - tf.reduce_mean(d_real) + l_term * gp
-    d_loss = tf.identity(d_loss, name='d_loss')
-    
-    # rmse_loss = tf.sqrt(tf.reduce_mean(tf.square((x[:,:,:,3]+1.0)/2.0 - (g[:,:,:,3]+1.0)/2.0)), name='rmse_loss')
+    """
+    # generator loss
+    _, x_depth = _split(x)
+    _, g_depth = _split(g)
     if not reuse:
-        tf.add_to_collection('losses', g_loss)
-        tf.add_to_collection('losses', d_loss)
-        tf.add_to_collection('losses', rmse_loss)
+        hem.histograms(('loss_x_depth', x_depth), ('loss_g_depth', g_depth))
+    # rescaled to [0, 1]
+    x_depth = (x_depth + 1.0)/2.0
+    g_depth = (g_depth + 1.0)/2.0
+
+    if not reuse:
+        hem.histograms(('loss_x_depth_rescaled', x_depth), ('loss_g_depth_rescaled', g_depth))
+
+    l_term = 1.0
+    rmse_loss = hem.rmse(x_depth, g_depth, name='rmse')
+    g_loss = tf.identity(-tf.reduce_mean(d_fake) + l_term * rmse_loss, name='g_loss')
+
+    # discriminator loss
+    l_term = 10.0
+    with tf.variable_scope('discriminator'):
+        gp = tf.identity(_gradient_penalty(x, g, args), 'grad_penalty')
+    d_gan_loss = tf.identity(tf.reduce_mean(d_fake) - tf.reduce_mean(d_real), name='d_loss1')
+    d_grad_penalty_loss = tf.identity(l_term * gp, name='d_loss2')
+    d_loss = tf.identity(d_gan_loss + d_grad_penalty_loss, name='d_loss')
+
+    # track losses in collection node
+    if not reuse:
+        for l in [g_loss, d_loss, rmse_loss, d_gan_loss, d_grad_penalty_loss]:
+            tf.add_to_collection('losses', l)
+
     return g_loss, d_loss
 
 
-def gradient_penalty(x, g, args):
+def _gradient_penalty(x, g, args):
     """Calculate gradient penalty for discriminator.
-        
-    This requires creating a separate discriminator path.
 
-    Args: 
-    x: Tensor, the real images.
-    g: Tensor, the fake images.
-    args: Argparse structure.
+    Source: `Improved Training of Wasserstein GANs`
+    https://arxiv.org/abs/1704.00028
+
+    Args:
+        x: Tensor, the real (input) images.
+        g: Tensor, the fake (generator) images.
+        args: Argparse struct.
+
+    Returns:
+        Tensor, the gradient penalty term.
     """
-    x = flatten(x)
-    g = flatten(g)
-    
-    alpha = tf.random_uniform(shape=[args.batch_size, 1], minval=0.0, maxval=1.0)
-    differences = g - x
-    interpolates = x + (alpha * differences)
-    interpolates = tf.reshape(interpolates, [-1, 64, 64, 4])
-    d_interpolates = discriminator(interpolates, args, reuse=True)
-    gradients = tf.gradients(d_interpolates, [interpolates])[0]
+    x = hem.flatten(x)
+    g = hem.flatten(g)
+    alpha = tf.random_uniform(shape=[args.batch_size, 1], minval=0, maxval=1.0)
+    interpolates = x + (alpha * (g - x))
+    interpolates = tf.reshape(interpolates, (-1, 4, 64, 64))
+    d = discriminator(interpolates, args, reuse=True)
+    gradients = tf.gradients(d, [interpolates])[0]
     slopes = tf.sqrt(tf.reduce_sum(tf.square(gradients)))
     penalty = tf.reduce_mean((slopes-1.0)**2)
     return penalty
 
 
-def encoder(x, reuse=False):
+def generator(x, args, reuse=False):
+    """Adds generator nodes to the graph.
+
+    This is a typical autoencoder architecture where the input is the image x
+    and a nosie vector, and the output is an estimated depth map.
+
+    Args:
+        x: Tensor, the input tensor.
+        args: Argparse struct.
+        reuse: Boolean, whether to reuse the variables in this scope.
+
+    Returns:
+        Tensor, the output of the constructed generator.
+    """
+    e = _encoder(x, args, reuse)
+    d = _decoder(e, args, reuse)
+    g = tf.concat((x, d), axis=1)
+    return g
+
+
+def _encoder(x, args, reuse=False):
     """Adds encoder nodes to the graph.
 
     Args:
-      x: Tensor, input images.
-      reuse: Boolean, whether to reuse variables.
+        x: Tensor, the input tensor/images.
+        args: Arparse struct.
+        reuse: Boolean, whether to reuse variables.
+
+    Returns:
+        Tensor, the encoded latent variables for the given input.
     """
-    with arg_scope([conv2d],
+    with arg_scope([hem.conv2d],
                    reuse=reuse,
-                   activation=lrelu):
-        # input = 64x64x3
-        x = conv2d(x,   3,  64, 5, 2, name='e_c1')  # output = 32x32x64
-        x = conv2d(x,  64, 128, 5, 2, name='e_c2')  # output = 16x16x128
-        x = conv2d(x, 128, 256, 5, 2, name='e_c3')  # output = 8x8x256
-        x = conv2d(x, 256, 256, 5, 2, name='e_c4')  # output = 4x4x256
-        x = conv2d(x, 256,  96, 1,    name='e_c5')  # output = 4x4x96
-        x = conv2d(x,  96,  32, 1,    name='e_c6')  # output = 4x4x32
+                   use_batch_norm=args.batch_norm,
+                   dropout=args.dropout,
+                   activation=hem.lrelu):
+        noise = tf.random_uniform((args.batch_size, 64, 64, 1), minval=-1.0, maxval=1.0)
+        noise = tf.transpose(noise, [0, 3, 1, 2])
+        x = tf.concat([x, noise], axis=1)
+        # input = 64x646x4
+        x = hem.conv2d(x,   4,  64, 5, 2, name='e_c1', dropout=0, use_batch_norm=False)  # output = 32x32x64
+        x = hem.conv2d(x,  64, 128, 5, 2, name='e_c2')  # output = 16x16x128
+        x = hem.conv2d(x, 128, 256, 5, 2, name='e_c3')  # output = 8x8x256
+        x = hem.conv2d(x, 256, 256, 5, 2, name='e_c4')  # output = 4x4x256
+        x = hem.conv2d(x, 256,  96, 1,    name='e_c5')  # output = 4x4x96
+        x = hem.conv2d(x,  96,  32, 1,    name='e_c6')  # output = 4x4x32
+
     return x
 
 
-def decoder(x, skip_layers, reuse=False):
-    """Adds decoder nodes to the graph.
+def _decoder(x, args, reuse=False):
+    """
+    Adds decoder nodes to the graph.
 
     Args:
-      x: Tensor, encoded image representation.
-      skip_layers:
-      reuse: Boolean, whether to reuse variables.
+        x: Tensor, the latent variable tensor from the encoder.
+        args: Argparse structure.
+        reuse: Boolean, whether to reuse pinned variables (in multi-GPU environment).
+
+    Returns:
+        Tensor, a single-channel image representing the predicted depth map.
     """
     e_layers = tf.get_collection('conv_layers')
     
-    with arg_scope([dense, conv2d, deconv2d],
+    with arg_scope([hem.dense, hem.conv2d, hem.deconv2d],
                    reuse=reuse,
+                   use_batch_norm=args.batch_norm,
+                   dropout=args.dropout,
                    activation=tf.nn.relu):
-        # x = flatten(x)
-        # x = dense(x, 32*4*4, latent_size, name='d_d1')
-        # x = dense(x, latent_size, 32*4*4, name='d_d2')
-        # x = tf.reshape(x, [-1, 4, 4, 32]) # un-flatten
+        skip_axis = 1
+        skip_m = 2 if args.skip_layers else 1
 
+        # TODO add better support for skip layers in layer ops
         # input = 4x4x32
-        x = conv2d(x,    32,  96, 1,    name='d_c1')    # output = 4x4x96     + e_c5
-        x = tf.concat((x, e_layers[4]), axis=-1) if skip_layers else x
-        x = conv2d(x,    96*2, 256, 1,    name='d_c2')    # output = 4x4x256    + e_c4
-        x = tf.concat((x, e_layers[3]), axis=-1) if skip_layers else x
-        x = deconv2d(x, 256*2, 256, 5, 2, name='d_dc1')   # output = 8x8x256    + e_c3
-        x = tf.concat((x, e_layers[2]), axis=-1) if skip_layers else x
-        x = deconv2d(x, 256*2, 128, 5, 2, name='d_dc2')   # output = 16x16x128  + e_c2
-        x = tf.concat((x, e_layers[1]), axis=-1) if skip_layers else x
-        x = deconv2d(x, 128*2,  64, 5, 2, name='d_dc3')   # output = 32x32x64   + e_c1
-        x = tf.concat((x, e_layers[0]), axis=-1) if skip_layers else x
-        x = deconv2d(x,  64*2,   1, 5, 2, name='d_dc4', activation=tf.nn.tanh)  # output = 64x64x1
+        x = hem.conv2d(x,    32,  96, 1,    name='d_c1')           # output = 4x4x96    + e_c5
+        x = tf.concat((x, e_layers[4]), axis=skip_axis) if args.skip_layers else x
+        x = hem.conv2d(x,    96*skip_m, 256, 1,    name='d_c2')    # output = 4x4x256   + e_c4
+        x = tf.concat((x, e_layers[3]), axis=skip_axis) if args.skip_layers else x
+
+        x = hem.deconv2d(x, 256*skip_m, 256, 5, 2, name='d_dc1')   # output = 8x8x256   + e_c3
+
+
+        x = tf.concat((x, e_layers[2]), axis=skip_axis) if args.skip_layers else x
+        x = hem.deconv2d(x, 256*skip_m, 128, 5, 2, name='d_dc2')   # output = 16x16x128 + e_c2
+        x = tf.concat((x, e_layers[1]), axis=skip_axis) if args.skip_layers else x
+        x = hem.deconv2d(x, 128*skip_m,  64, 5, 2, name='d_dc3')   # output = 32x32x64  + e_c1
+        x = tf.concat((x, e_layers[0]), axis=skip_axis) if args.skip_layers else x
+        x = hem.deconv2d(x,  64*skip_m,   1, 5, 2, name='d_dc4', activation=tf.nn.tanh, dropout=0, use_batch_norm=False)  # output = 64x64x1
     return x
 
-
-# def generator(x, batch_size, latent_size, args, reuse=False):
-#     """Adds generator nodes to the graph.
-
-#     From noise, applies deconv2d until image is scaled up to match
-#     the dataset.
-#     """
-#     # x = x[:,0:64*64*3] # image
-#     output_dim = 64*64*4
-#     with arg_scope([dense, deconv2d],
-#                        reuse = reuse,
-#                        use_batch_norm = True,
-#                        activation = tf.nn.relu):
-        
-#         # z = tf.random_normal([batch_size, latent_size])
-#         # # x = flatten(x)
-#         # z = tf.concat((z, flatten(x)), axis=1)
-#         y = dense(x, latent_size+64*64*3, 4*4*4*latent_size, name='fc1')
-#         y = tf.reshape(y, [-1, 4, 4, 4*latent_size])
-#         y = deconv2d(y, 4*latent_size, 2*latent_size, 5, 2, name='dc1')
-#         y = deconv2d(y, 2*latent_size, latent_size, 5, 2, name='dc2')
-#         y = deconv2d(y, latent_size, int(latent_size/2), 5, 2, name='dc3')
-#         y = deconv2d(y, int(latent_size/2), 1, 5, 2, name='dc4', activation=tf.tanh, use_batch_norm=False)
-#         y = tf.concat((x, y), axis=3)
-#         # y = tf.reshape(y, [-1, output_dim])
-#     return y
 
 
 def discriminator(x, args, reuse=False):
@@ -278,28 +372,39 @@ def discriminator(x, args, reuse=False):
     From the input image, successively applies convolutions with
     striding to scale down layer sizes until we get to a single
     output value, representing the discriminator's estimate of fake
-    vs real. The single final output acts similar to a sigmoid
-    activation function.
+    vs real.
 
     Args:
-    x: Tensor, input.
-    args: Argparse structure.
-    reuse: Boolean, whether to reuse variables.
+        x: Tensor, the input (image) tensor. This should be a 4D Tensor with 3 RGB channels† and 1 depth channel.
+        args: Argparse struct.
+        reuse: Boolean, whether to reuse the variables in this scope.
 
     Returns:
-    Final output of discriminator pipeline.
+        Tensor, the discriminator's estimation of whether the inputs are fake or real.
     """
-    use_bn = False
-    final_activation = None
-    with arg_scope([conv2d],
-                   use_batch_norm=use_bn,
-                   activation=lrelu,
+    with arg_scope([hem.conv2d],
+                   activation=hem.lrelu,
                    reuse=reuse):
-        # x = tf.reshape(x, [-1, 64, 64, 4])
-        x = conv2d(x, 4, args.latent_size, 5, 2, use_batch_norm=False, name='disc_c1')
-        x = conv2d(x, args.latent_size, args.latent_size*2, 5, 2, name='disc_c2')
-        x = conv2d(x, args.latent_size*2, args.latent_size*4, 5, 2, name='disc_c3')
-        x = tf.reshape(x, [-1, 4*4*4*args.latent_size])
-        x = dense(x, 4*4*4*args.latent_size, 1, use_batch_norm=False, activation=final_activation, name='disc_fc2', reuse=reuse)
-        x = tf.reshape(x, [-1])
+        x = hem.conv2d(x, 4,    64, 5, 2, name='disc_c1')
+        x = hem.conv2d(x, 64,  128, 5, 2, name='disc_c2')
+        x = hem.conv2d(x, 128, 256, 5, 2, name='disc_c3')
+        x = hem.conv2d(x, 256, 512, 1,    name='disc_c4')
+        x = hem.conv2d(x, 512, 1,   1,    name='disc_c5', activation=tf.nn.sigmoid)
     return x
+
+
+def _split(x, reshape_to=None, name=None):
+    """Split the 4D tesnor into RGB and Depth components.
+
+    Args:
+        x: Tensor, 4D tensor (images + depths)
+        name: String, name for this op.
+
+    Returns:
+        Tuple, contains two Tensors representing the image and depth, respectively
+    """
+    with tf.name_scope(name, 'split', [x]):
+        rgb = x[:, 0:3, :, :]
+        depth = x[:, 3, :, :]
+        depth = tf.expand_dims(depth, 1)
+    return rgb, depth
