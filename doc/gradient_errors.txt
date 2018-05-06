@@ -1,0 +1,119 @@
+Caught unexpected exception during training: GRADIENT ERROR on layer <tf.Variable 'generator/decoder/vars/8/bias:0' shape=(1,) dtype=float32_ref>, grad Tensor("average_gradients/Mean_45:0", shape=(1,), dtype=float32, device=/device:CPU:0) : Tensor had NaN values
+         [[Node: average_gradients/CheckNumerics_45 = CheckNumerics[T=DT_FLOAT, message="GRADIENT ERROR on layer <tf.Variable \'generator/decoder/vars/8/bias:0\' shape=(1,) dtype=float32_ref>, grad Tensor(\"average_gradients/Mean_45:0\", shape=(1,), dtype=float32, device=/device:CPU:0)", _device="/job:localhost/replica:0/task:0/cpu:0"](average_gradients/Mean_45)]]
+
+Caused by op 'average_gradients/CheckNumerics_45', defined at:
+  File "train.py", line 289, in <module>
+    model = model(x, args)
+  File "/mnt/research/projects/autoencoders/hem/util/scoping.py", line 61, in wrapper
+    return func(*args, **kwargs)
+  File "/mnt/research/projects/autoencoders/hem/models/pix2pix.py", line 127, in __init__
+    g_grads = hem.average_gradients(g_tower_grads, check_numerics=args.check_numerics)
+  File "/mnt/research/projects/autoencoders/hem/util/training.py", line 49, in average_gradients
+    grad = tf.check_numerics(grad, 'GRADIENT ERROR on layer {}, grad {}'.format(v, grad))
+  File "/usr/lib/python3.6/site-packages/tensorflow/python/ops/gen_array_ops.py", line 558, in check_numerics
+    "CheckNumerics", tensor=tensor, message=message, name=name)
+  File "/usr/lib/python3.6/site-packages/tensorflow/python/framework/op_def_library.py", line 789, in _apply_op_helper
+    op_def=op_def)
+  File "/usr/lib/python3.6/site-packages/tensorflow/python/framework/ops.py", line 3052, in create_op
+    op_def=op_def)
+  File "/usr/lib/python3.6/site-packages/tensorflow/python/framework/ops.py", line 1610, in __init__
+    self._traceback = self._graph._extract_stack()  # pylint: disable=protected-access
+
+InvalidArgumentError (see above for traceback): GRADIENT ERROR on layer <tf.Variable 'generator/decoder/vars/8/bias:0' shape=(1,) dtype=float32_ref>, grad Tensor("average_gradients/Mean_45:0", shape=(1,), dtype=float32, device=/device:CPU:0) : Tensor had NaN values
+         [[Node: average_gradients/CheckNumerics_45 = CheckNumerics[T=DT_FLOAT, message="GRADIENT ERROR on layer <tf.Variable \'generator/decoder/vars/8/bias:0\' shape=(1,) dtype=float32_ref>, grad Tensor(\"average_gradients/Mean_45:0\", shape=(1,), dtype=float32, device=/device:CPU:0)", _device="/job:localhost/replica:0/task:0/cpu:0"](average_gradients/Mean_45)]]
+ GRADIENT ERROR on layer <tf.Variable 'generator/decoder/vars/8/bias:0' shape=(1,) dtype=float32_ref>, grad Tensor("average_gradients/Mean_45:0", shape=(1,), dtype=float32, device=/device:CPU:0) : Tensor had NaN values
+         [[Node: average_gradients/CheckNumerics_45 = CheckNumerics[T=DT_FLOAT, message="GRADIENT ERROR on layer <tf.Variable \'generator/decoder/vars/8/bias:0\' shape=(1,) dtype=float32_ref>, grad Tensor(\"average_gradients/Mean_45:0\", shape=(1,), dtype=float32, device=/device:CPU:0)", _device="/job:localhost/replica:0/task:0/cpu:0"](average_gradients/Mean_45)]]
+ERROR during training, possible crash! Attempting to resume...
+
+
+
+
+
+
+
+
+Caught unexpected exception during training: GRADIENT ERROR on layer <tf.Variable 'discriminator/vars/m5/weights:0' shape=(4, 4, 512, 1) dtype=float32_ref>, grad Tensor("average_gradients_1/Mean_8:0", shape=(4, 4, 512, 1), dtype=float32, device=/device:CPU:0) : Tensor had NaN values
+         [[Node: average_gradients_1/CheckNumerics_8 = CheckNumerics[T=DT_FLOAT, message="GRADIENT ERROR on layer <tf.Variable \'discriminator/vars/m5/weights:0\' shape=(4, 4, 512, 1) dtype=float32_ref>, grad Tensor(\"average_gradients_1/Mean_8:0\", shape=(4, 4, 512, 1), dtype=float32, device=/device:CPU:0)", _device="/job:localhost/replica:0/task:0/cpu:0"](average_gradients_1/Mean_8)]]
+
+Caused by op 'average_gradients_1/CheckNumerics_8', defined at:
+  File "train.py", line 289, in <module>
+    model = model(x, args)
+  File "/mnt/research/projects/autoencoders/hem/util/scoping.py", line 61, in wrapper
+    return func(*args, **kwargs)
+  File "/mnt/research/projects/autoencoders/hem/models/pix2pix.py", line 128, in __init__
+    d_grads = hem.average_gradients(d_tower_grads, check_numerics=args.check_numerics)
+  File "/mnt/research/projects/autoencoders/hem/util/training.py", line 49, in average_gradients
+    grad = tf.check_numerics(grad, 'GRADIENT ERROR on layer {}, grad {}'.format(v, grad))
+  File "/usr/lib/python3.6/site-packages/tensorflow/python/ops/gen_array_ops.py", line 558, in check_numerics
+    "CheckNumerics", tensor=tensor, message=message, name=name)
+  File "/usr/lib/python3.6/site-packages/tensorflow/python/framework/op_def_library.py", line 789, in _apply_op_helper
+    op_def=op_def)
+  File "/usr/lib/python3.6/site-packages/tensorflow/python/framework/ops.py", line 3052, in create_op
+    op_def=op_def)
+  File "/usr/lib/python3.6/site-packages/tensorflow/python/framework/ops.py", line 1610, in __init__
+    self._traceback = self._graph._extract_stack()  # pylint: disable=protected-access
+
+InvalidArgumentError (see above for traceback): GRADIENT ERROR on layer <tf.Variable 'discriminator/vars/m5/weights:0' shape=(4, 4, 512, 1) dtype=float32_ref>, grad Tensor("average_gradients_1/Mean_8:0", shape=(4, 4, 512, 1), dtype=float32, device=/device:CPU:0) : Tensor had NaN values
+         [[Node: average_gradients_1/CheckNumerics_8 = CheckNumerics[T=DT_FLOAT, message="GRADIENT ERROR on layer <tf.Variable \'discriminator/vars/m5/weights:0\' shape=(4, 4, 512, 1) dtype=float32_ref>, grad Tensor(\"average_gradients_1/Mean_8:0\", shape=(4, 4, 512, 1), dtype=float32, device=/device:CPU:0)", _device="/job:localhost/replica:0/task:0/cpu:0"](average_gradients_1/Mean_8)]]
+ GRADIENT ERROR on layer <tf.Variable 'discriminator/vars/m5/weights:0' shape=(4, 4, 512, 1) dtype=float32_ref>, grad Tensor("average_gradients_1/Mean_8:0", shape=(4, 4, 512, 1), dtype=float32, device=/device:CPU:0) : Tensor had NaN values
+         [[Node: average_gradients_1/CheckNumerics_8 = CheckNumerics[T=DT_FLOAT, message="GRADIENT ERROR on layer <tf.Variable \'discriminator/vars/m5/weights:0\' shape=(4, 4, 512, 1) dtype=float32_ref>, grad Tensor(\"average_gradients_1/Mean_8:0\", shape=(4, 4, 512, 1), dtype=float32, device=/device:CPU:0)", _device="/job:localhost/replica:0/task:0/cpu:0"](average_gradients_1/Mean_8)]]
+ERROR during training, possible crash! Attempting to resume...
+
+
+
+
+
+Caught unexpected exception during training: GRADIENT ERROR on layer <tf.Variable 'discriminator/vars/m5/bias:0' shape=(1,) dtype=float32_ref>, grad Tensor("average_gradients_1/Mean_9:0", shape=(1,), dtype=float32, device=/device:CPU:0) : Tensor had NaN values
+         [[Node: average_gradients_1/CheckNumerics_9 = CheckNumerics[T=DT_FLOAT, message="GRADIENT ERROR on layer <tf.Variable \'discriminator/vars/m5/bias:0\' shape=(1,) dtype=float32_ref>, grad Tensor(\"average_gradients_1/Mean_9:0\", shape=(1,), dtype=float32, device=/device:CPU:0)", _device="/job:localhost/replica:0/task:0/cpu:0"](average_gradients_1/Mean_9)]]
+
+Caused by op 'average_gradients_1/CheckNumerics_9', defined at:
+  File "train.py", line 289, in <module>
+    model = model(x, args)
+  File "/mnt/research/projects/autoencoders/hem/util/scoping.py", line 61, in wrapper
+    return func(*args, **kwargs)
+  File "/mnt/research/projects/autoencoders/hem/models/pix2pix.py", line 128, in __init__
+    d_grads = hem.average_gradients(d_tower_grads, check_numerics=args.check_numerics)
+  File "/mnt/research/projects/autoencoders/hem/util/training.py", line 49, in average_gradients
+    grad = tf.check_numerics(grad, 'GRADIENT ERROR on layer {}, grad {}'.format(v, grad))
+  File "/usr/lib/python3.6/site-packages/tensorflow/python/ops/gen_array_ops.py", line 558, in check_numerics
+    "CheckNumerics", tensor=tensor, message=message, name=name)
+  File "/usr/lib/python3.6/site-packages/tensorflow/python/framework/op_def_library.py", line 789, in _apply_op_helper
+    op_def=op_def)
+  File "/usr/lib/python3.6/site-packages/tensorflow/python/framework/ops.py", line 3052, in create_op
+    op_def=op_def)
+  File "/usr/lib/python3.6/site-packages/tensorflow/python/framework/ops.py", line 1610, in __init__
+    self._traceback = self._graph._extract_stack()  # pylint: disable=protected-access
+
+InvalidArgumentError (see above for traceback): GRADIENT ERROR on layer <tf.Variable 'discriminator/vars/m5/bias:0' shape=(1,) dtype=float32_ref>, grad Tensor("average_gradients_1/Mean_9:0", shape=(1,), dtype=float32, device=/device:CPU:0) : Tensor had NaN values
+         [[Node: average_gradients_1/CheckNumerics_9 = CheckNumerics[T=DT_FLOAT, message="GRADIENT ERROR on layer <tf.Variable \'discriminator/vars/m5/bias:0\' shape=(1,) dtype=float32_ref>, grad Tensor(\"average_gradients_1/Mean_9:0\", shape=(1,), dtype=float32, device=/device:CPU:0)", _device="/job:localhost/replica:0/task:0/cpu:0"](average_gradients_1/Mean_9)]]
+ GRADIENT ERROR on layer <tf.Variable 'discriminator/vars/m5/bias:0' shape=(1,) dtype=float32_ref>, grad Tensor("average_gradients_1/Mean_9:0", shape=(1,), dtype=float32, device=/device:CPU:0) : Tensor had NaN values
+         [[Node: average_gradients_1/CheckNumerics_9 = CheckNumerics[T=DT_FLOAT, message="GRADIENT ERROR on layer <tf.Variable \'discriminator/vars/m5/bias:0\' shape=(1,) dtype=float32_ref>, grad Tensor(\"average_gradients_1/Mean_9:0\", shape=(1,), dtype=float32, device=/device:CPU:0)", _device="/job:localhost/replica:0/task:0/cpu:0"](average_gradients_1/Mean_9)]]
+ERROR during training, possible crash! Attempting to resume...
+
+
+Caught unexpected exception during training: GRADIENT ERROR on layer <tf.Variable 'discriminator/vars/m5/weights:0' shape=(4, 4, 512, 1) dtype=float32_ref>, grad Tensor("average_gradients_1/Mean_8:0", shape=(4, 4, 512, 1), dtype=float32, device=/device:CPU:0) : Tensor had NaN values
+	 [[Node: average_gradients_1/CheckNumerics_8 = CheckNumerics[T=DT_FLOAT, message="GRADIENT ERROR on layer <tf.Variable \'discriminator/vars/m5/weights:0\' shape=(4, 4, 512, 1) dtype=float32_ref>, grad Tensor(\"average_gradients_1/Mean_8:0\", shape=(4, 4, 512, 1), dtype=float32, device=/device:CPU:0)", _device="/job:localhost/replica:0/task:0/cpu:0"](average_gradients_1/Mean_8)]]
+
+Caused by op 'average_gradients_1/CheckNumerics_8', defined at:
+  File "train.py", line 289, in <module>
+    model = model(x, args)
+  File "/mnt/research/projects/autoencoders/hem/util/scoping.py", line 61, in wrapper
+    return func(*args, **kwargs)
+  File "/mnt/research/projects/autoencoders/hem/models/pix2pix.py", line 128, in __init__
+    d_grads = hem.average_gradients(d_tower_grads, check_numerics=args.check_numerics)
+  File "/mnt/research/projects/autoencoders/hem/util/training.py", line 49, in average_gradients
+    grad = tf.check_numerics(grad, 'GRADIENT ERROR on layer {}, grad {}'.format(v, grad))
+  File "/usr/lib/python3.6/site-packages/tensorflow/python/ops/gen_array_ops.py", line 558, in check_numerics
+    "CheckNumerics", tensor=tensor, message=message, name=name)
+  File "/usr/lib/python3.6/site-packages/tensorflow/python/framework/op_def_library.py", line 787, in _apply_op_helper
+    op_def=op_def)
+  File "/usr/lib/python3.6/site-packages/tensorflow/python/framework/ops.py", line 3082, in create_op
+    op_def=op_def)
+  File "/usr/lib/python3.6/site-packages/tensorflow/python/framework/ops.py", line 1632, in __init__
+    self._traceback = self._graph._extract_stack()  # pylint: disable=protected-access
+
+InvalidArgumentError (see above for traceback): GRADIENT ERROR on layer <tf.Variable 'discriminator/vars/m5/weights:0' shape=(4, 4, 512, 1) dtype=float32_ref>, grad Tensor("average_gradients_1/Mean_8:0", shape=(4, 4, 512, 1), dtype=float32, device=/device:CPU:0) : Tensor had NaN values
+	 [[Node: average_gradients_1/CheckNumerics_8 = CheckNumerics[T=DT_FLOAT, message="GRADIENT ERROR on layer <tf.Variable \'discriminator/vars/m5/weights:0\' shape=(4, 4, 512, 1) dtype=float32_ref>, grad Tensor(\"average_gradients_1/Mean_8:0\", shape=(4, 4, 512, 1), dtype=float32, device=/device:CPU:0)", _device="/job:localhost/replica:0/task:0/cpu:0"](average_gradients_1/Mean_8)]]
+ GRADIENT ERROR on layer <tf.Variable 'discriminator/vars/m5/weights:0' shape=(4, 4, 512, 1) dtype=float32_ref>, grad Tensor("average_gradients_1/Mean_8:0", shape=(4, 4, 512, 1), dtype=float32, device=/device:CPU:0) : Tensor had NaN values
+	 [[Node: average_gradients_1/CheckNumerics_8 = CheckNumerics[T=DT_FLOAT, message="GRADIENT ERROR on layer <tf.Variable \'discriminator/vars/m5/weights:0\' shape=(4, 4, 512, 1) dtype=float32_ref>, grad Tensor(\"average_gradients_1/Mean_8:0\", shape=(4, 4, 512, 1), dtype=float32, device=/device:CPU:0)", _device="/job:localhost/replica:0/task:0/cpu:0"](average_gradients_1/Mean_8)]]
+ERROR during training, possible crash! Attempting to resume...
